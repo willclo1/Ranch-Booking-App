@@ -35,11 +35,11 @@ export function MorePage() {
       {admin && <PeopleManager />}
 
       <Link to="/install" className="card row" style={{ justifyContent: 'center', fontWeight: 700, fontSize: 14 }}>
-        ðŸ“² How to put this app on your phone
+         How to put this app on your phone
       </Link>
 
       <p className="muted small" style={{ textAlign: 'center', marginTop: 10 }}>
-        AV Ranch Â· La Grange, TX
+        AV Ranch · La Grange, TX
       </p>
     </div>
   );
@@ -65,7 +65,7 @@ function MyPhone({ userId }: { userId: number }) {
   return (
     <div>
       <div className="muted small" style={{ fontWeight: 650, marginBottom: 4 }}>
-        Your phone number <span style={{ fontWeight: 400 }}>Â· used for the "text to approve" buttons</span>
+        Your phone number <span style={{ fontWeight: 400 }}>· used for the "text to approve" buttons</span>
       </div>
       <PhoneField key={me.phone ?? ''} user={me} onSave={(phone) => save.mutate(phone)} />
     </div>
@@ -82,7 +82,7 @@ function ApprovalsInbox() {
     <>
       <h3 className="section-title">Approvals inbox</h3>
       {isLoading && <Spinner />}
-      {data?.bookings.length === 0 && <p className="muted">Nothing waiting on you. ðŸ¤ </p>}
+      {data?.bookings.length === 0 && <p className="muted">Nothing waiting on you.</p>}
       <div className="stack">
         {data?.bookings.map((b) => (
           <BookingCard key={b.id} booking={b} onClick={() => navigate(`/booking/${b.id}`)} />
