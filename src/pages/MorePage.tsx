@@ -14,18 +14,21 @@ export function MorePage() {
 
   return (
     <div className="stack">
-      <div className="card row spread">
-        <div>
-          <div style={{ fontWeight: 800, fontSize: 17 }}>{user?.name}</div>
-          <div className="muted small">
-            {user?.family ? (user.family === 'clore' ? 'Clore family' : 'Gabriel family') : 'Family member'}
-            {user?.role === 'admin' && ' · Admin'}
-            {user?.role === 'sysadmin' && ' · Sysadmin'}
+      <div className="card stack" style={{ gap: 10 }}>
+        <div className="row spread">
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 17 }}>{user?.name}</div>
+            <div className="muted small">
+              {user?.family ? (user.family === 'clore' ? 'Clore family' : 'Gabriel family') : 'Family member'}
+              {user?.role === 'admin' && ' · Admin'}
+              {user?.role === 'sysadmin' && ' · Sysadmin'}
+            </div>
           </div>
+          <button className="btn btn-sm" onClick={() => logout()}>
+            Sign out
+          </button>
         </div>
-        <button className="btn btn-sm" onClick={() => logout()}>
-          Sign out
-        </button>
+        {user && user.role !== 'sysadmin' && <MyPhone userId={user.id} />}
       </div>
 
       {admin && <ApprovalsInbox />}
@@ -39,6 +42,33 @@ export function MorePage() {
       <p className="muted small" style={{ textAlign: 'center', marginTop: 10 }}>
         AV Ranch · La Grange, TX
       </p>
+    </div>
+  );
+}
+
+/** Everyone can save their own phone number — it powers the tap-to-text buttons. */
+function MyPhone({ userId }: { userId: number }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const { data } = useQuery({ queryKey: ['users'], queryFn: () => api.get<{ users: User[] }>('/api/users') });
+  const me = data?.users.find((u) => u.id === userId);
+
+  const save = useMutation({
+    mutationFn: (phone: string) => api.patch(`/api/users/${userId}`, { phone }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['users'] });
+      toast('Phone number saved');
+    },
+    onError: (e) => toast(e instanceof Error ? e.message : 'Failed', 'error'),
+  });
+
+  if (!me) return null;
+  return (
+    <div>
+      <div className="muted small" style={{ fontWeight: 650, marginBottom: 4 }}>
+        Your phone number <span style={{ fontWeight: 400 }}>· used for the "text to approve" buttons</span>
+      </div>
+      <PhoneField key={me.phone ?? ''} user={me} onSave={(phone) => save.mutate(phone)} />
     </div>
   );
 }

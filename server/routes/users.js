@@ -29,8 +29,11 @@ users.post('/', requireUser, (req, res) => {
   res.status(201).json({ user: { ...row, hasPin: false } });
 });
 
-/** Admin management: set family side, promote/demote, reset PIN. */
-users.patch('/:id', requireAdmin, (req, res) => {
+/**
+ * Update a person. Anyone can update their OWN phone number; everything else
+ * (family side, name, PIN reset, roles) is admin territory.
+ */
+users.patch('/:id', requireUser, (req, res) => {
   const db = getDb();
   const id = Number(req.params.id);
   const target = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
@@ -38,6 +41,15 @@ users.patch('/:id', requireAdmin, (req, res) => {
   if (target.role === 'sysadmin') return res.status(403).json({ error: 'Cannot modify the sysadmin account' });
 
   const body = req.body || {};
+  const isAdmin = req.user.role === 'admin' || req.user.role === 'sysadmin';
+  const isSelf = req.user.id === id;
+  if (!isAdmin) {
+    if (!isSelf) return res.status(403).json({ error: 'You can only edit your own profile' });
+    if (Object.keys(body).some((k) => k !== 'phone')) {
+      return res.status(403).json({ error: 'You can only change your own phone number' });
+    }
+  }
+
   if ('family' in body) {
     const family = body.family === 'clore' || body.family === 'gabriel' ? body.family : null;
     db.prepare('UPDATE users SET family = ? WHERE id = ?').run(family, id);

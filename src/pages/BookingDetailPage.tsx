@@ -124,7 +124,7 @@ export function BookingDetailPage() {
         </p>
       ) : (
       <div className="card stack">
-        <h3 style={{ fontSize: 15 }}>Approvals</h3>
+        <div className="card-title" style={{ marginBottom: 0 }}>Approvals</div>
         <div className="needs-line">
           {b.needs.clore && (
             <span className="chip chip-side-clore">Clore {sideSatisfied('clore') ? '✓' : '· waiting'}</span>

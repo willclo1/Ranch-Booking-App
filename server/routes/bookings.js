@@ -151,7 +151,7 @@ function parseBody(db, body) {
   if (!DATE_RE.test(startDate || '') || !DATE_RE.test(endDate || '')) throw new Err(400, 'Pick valid dates');
   if (startDate >= endDate) throw new Err(400, 'Departure must be after arrival');
   const isFullRanch = !!body.isFullRanch;
-  const allRooms = db.prepare('SELECT id, side, requires_approval FROM rooms').all();
+  const allRooms = db.prepare('SELECT id, name, side, requires_approval FROM rooms').all();
   const roomById = new Map(allRooms.map((r) => [r.id, r]));
 
   let roomEntries = Array.isArray(body.rooms) ? body.rooms : [];
@@ -174,6 +174,17 @@ function parseBody(db, body) {
     }
   }
   if (guests.length === 0) throw new Err(400, 'Add at least one guest');
+
+  // Every room in the booking must actually have a person in it —
+  // a whole-ranch booking means every room, so every room needs a guest.
+  const roomsWithGuests = new Set(guests.map((g) => g.roomId));
+  const missing = roomIds.filter((rid) => !roomsWithGuests.has(rid));
+  if (missing.length > 0) {
+    const names = missing.map((rid) => roomById.get(rid).name).join(', ');
+    throw new Err(400, isFullRanch
+      ? `Whole-ranch bookings need a guest in every room — still empty: ${names}`
+      : `Every booked room needs a guest — still empty: ${names}`);
+  }
 
   return { startDate, endDate, isFullRanch, notes: String(body.notes || '').slice(0, 500), roomIds, guests, roomById };
 }

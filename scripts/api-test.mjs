@@ -92,6 +92,8 @@ check('non-4-digit PIN rejected', r.status === 400);
 const roomsRes = await will.get('/api/rooms');
 const rooms = Object.fromEntries(roomsRes.data.rooms.map((x) => [x.key, x]));
 check('7 rooms', roomsRes.data.rooms.length === 7);
+// A guest in every room — required for whole-ranch bookings (user ids 1-7 are seeded).
+const allRoomGuests = roomsRes.data.rooms.map((rm, i) => ({ roomId: rm.id, guestIds: [i + 1] }));
 
 // --- Booking: gabriel room only, non-holiday ---
 console.log('\n--- gabriel room booking (Oct 2-4, no holiday) ---');
@@ -137,7 +139,7 @@ const bOther = r.data.booking;
 
 r = await will.post('/api/bookings', {
   startDate: '2026-10-01', endDate: '2026-10-08', isFullRanch: true,
-  rooms: [{ roomId: rooms.master1.id, guestIds: [5] }],
+  rooms: allRoomGuests,
 });
 check('full-ranch over existing bookings blocked', r.status === 409);
 
@@ -147,8 +149,14 @@ r = await will.post('/api/bookings', {
   startDate: '2026-11-06', endDate: '2026-11-08', isFullRanch: true,
   rooms: [{ roomId: rooms.master1.id, guestIds: [5] }],
 });
+check('full ranch with empty rooms rejected', r.status === 400);
+
+r = await will.post('/api/bookings', {
+  startDate: '2026-11-06', endDate: '2026-11-08', isFullRanch: true,
+  rooms: allRoomGuests,
+});
 const bFull = r.data.booking;
-check('full ranch created', r.status === 201, JSON.stringify(r.data));
+check('full ranch created (guest in every room)', r.status === 201, JSON.stringify(r.data));
 check('full ranch holds all 7 rooms', bFull.rooms.length === 7);
 check('needs both sides', bFull.needs.clore && bFull.needs.gabriel);
 
@@ -251,6 +259,10 @@ r = await erin.post('/api/users', { name: 'cousin ray' });
 check('duplicate name (case-insensitive) rejected', r.status === 409);
 r = await erin.patch(`/api/users/${rayId}`, { family: 'clore' });
 check('regular user cannot manage people', r.status === 403);
+r = await erin.patch('/api/users/6', { phone: '832-555-0142' });
+check('user sets their own phone', r.status === 200 && r.data.user.phone === '+18325550142', JSON.stringify(r.data));
+r = await erin.patch('/api/users/5', { phone: '832-555-0000' });
+check("user cannot set someone else's phone", r.status === 403);
 r = await jimmy.patch(`/api/users/${rayId}`, { family: 'clore' });
 check('admin sets family side', r.status === 200 && r.data.user.family === 'clore');
 r = await jimmy.patch(`/api/users/${rayId}`, { role: 'admin' });

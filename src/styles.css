@@ -214,6 +214,13 @@ a {
   letter-spacing: 0.02em;
   margin: 18px 2px 8px;
 }
+.card-title {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-bottom: 8px;
+}
 .muted {
   color: var(--muted);
   font-size: 13px;
@@ -886,21 +893,23 @@ label.field > * {
   gap: 6px;
 }
 
-/* ---------- house pictogram (booking form) ---------- */
+/* ---------- house plan (booking form) ---------- */
 .house {
-  border: 2px solid var(--ink);
-  border-radius: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
   overflow: hidden;
   background: var(--card);
+  box-shadow: var(--shadow);
 }
 .house-living {
   text-align: center;
-  padding: 14px 8px;
+  padding: 13px 8px;
   font-family: Georgia, 'Times New Roman', serif;
-  letter-spacing: 0.22em;
-  font-size: 13px;
+  letter-spacing: 0.24em;
+  font-size: 12.5px;
   font-weight: 700;
-  border-bottom: 2px solid var(--ink);
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
   background: var(--card-2);
 }
 .house-sides {
@@ -922,39 +931,50 @@ label.field > * {
 .house-side-label.gabriel {
   color: var(--gabriel);
   background: var(--gabriel-soft);
-  border-right: 2px solid var(--ink);
 }
 .house-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
 }
-.room-cell {
-  border-top: 1.5px solid var(--ink);
-  padding: 10px;
+.room-tile {
+  border: none;
+  border-top: 1px solid var(--line);
+  background: var(--card);
+  padding: 12px;
+  min-height: 88px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  min-height: 108px;
+  align-items: flex-start;
+  gap: 6px;
+  text-align: left;
+  cursor: pointer;
 }
-.room-cell.left {
-  border-right: 2px solid var(--ink);
+.room-tile.left {
+  border-right: 1px solid var(--line);
 }
-.room-cell.selected {
+.room-tile.wide {
+  width: 100%;
+}
+.room-tile:active:not(:disabled) {
+  background: var(--card-2);
+}
+.room-tile.selected.clore {
+  background: color-mix(in srgb, var(--clore-soft) 55%, var(--card));
+}
+.room-tile.selected.gabriel {
+  background: color-mix(in srgb, var(--gabriel-soft) 55%, var(--card));
+}
+.room-tile.selected.shared {
   background: color-mix(in srgb, var(--shared-soft) 55%, var(--card));
 }
-.room-cell.selected.clore {
-  background: color-mix(in srgb, var(--clore-soft) 60%, var(--card));
-}
-.room-cell.selected.gabriel {
-  background: color-mix(in srgb, var(--gabriel-soft) 60%, var(--card));
-}
-.room-cell.blocked {
+.room-tile.blocked {
+  cursor: not-allowed;
   background: repeating-linear-gradient(45deg, var(--card-2), var(--card-2) 7px, var(--card) 7px, var(--card) 14px);
 }
 .room-name {
   font-weight: 800;
-  font-size: 13.5px;
-  letter-spacing: 0.06em;
+  font-size: 13px;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   display: flex;
   align-items: center;
@@ -963,12 +983,29 @@ label.field > * {
 .room-sub {
   font-size: 11px;
   color: var(--muted);
-  margin-top: -5px;
+  margin-top: -4px;
 }
-.room-blocked-note {
+.tile-state {
   font-size: 12px;
   color: var(--muted);
   line-height: 1.35;
+}
+.tile-state.needs-guest {
+  color: var(--warn);
+  font-weight: 650;
+}
+.tile-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.guest-pill {
+  background: var(--card-2);
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  padding: 2px 9px;
+  font-size: 12px;
+  font-weight: 650;
 }
 .guest-select {
   width: 100%;
@@ -976,7 +1013,7 @@ label.field > * {
   border-radius: 10px;
   background: var(--card);
   padding: 9px 8px;
-  min-height: 40px;
+  min-height: 44px;
   font-size: 14px;
 }
 .add-guest-btn {
@@ -988,19 +1025,6 @@ label.field > * {
   font-weight: 700;
   cursor: pointer;
   padding: 4px 2px;
-}
-.loft-cell {
-  border-top: 2px solid var(--ink);
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.loft-cell.selected {
-  background: color-mix(in srgb, var(--shared-soft) 60%, var(--card));
-}
-.loft-cell.blocked {
-  background: repeating-linear-gradient(45deg, var(--card-2), var(--card-2) 7px, var(--card) 7px, var(--card) 14px);
 }
 
 .banner {
@@ -1029,11 +1053,12 @@ label.field > * {
 .book-all {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 13px;
-  border: 1.5px dashed var(--accent);
+  gap: 12px;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--card);
+  box-shadow: var(--shadow);
   font-weight: 700;
   cursor: pointer;
 }
@@ -1041,12 +1066,30 @@ label.field > * {
   width: 22px;
   height: 22px;
   accent-color: var(--accent);
+  flex: none;
+}
+.book-all-sub {
+  display: block;
+  font-weight: 500;
+  margin-top: 1px;
 }
 
 .dates-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 10px;
+}
+.dates-row .field {
+  min-width: 0;
+}
+/* iOS date inputs refuse to shrink unless forced */
+.dates-row .input {
+  min-width: 0;
+  width: 100%;
+  padding: 10px 8px;
+  font-size: 15px;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 /* ---------- lists ---------- */

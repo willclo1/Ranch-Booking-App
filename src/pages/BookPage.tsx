@@ -33,11 +33,12 @@ export function BookPage() {
   const [fullRanch, setFullRanch] = useState(false);
   const [notes, setNotes] = useState('');
   const [guestMap, setGuestMap] = useState<GuestMap>({});
-  const [addNameTarget, setAddNameTarget] = useState<{ roomId: number; idx: number } | null>(null);
+  const [openRoomId, setOpenRoomId] = useState<number | null>(null);
   const [loadedEdit, setLoadedEdit] = useState(false);
 
   const rooms = roomData?.rooms ?? [];
   const users = userData?.users ?? [];
+  const openRoom = rooms.find((r) => r.id === openRoomId) ?? null;
 
   // Prefill when editing
   useEffect(() => {
@@ -66,6 +67,7 @@ export function BookPage() {
 
   const selectsFor = (roomId: number): (number | null)[] => guestMap[roomId] ?? [null];
   const chosenIn = (roomId: number) => selectsFor(roomId).filter((x): x is number => x !== null);
+  const nameOf = (uid: number) => users.find((u) => u.id === uid)?.name ?? '';
 
   const setGuest = (roomId: number, idx: number, value: number | null) => {
     setGuestMap((m) => {
@@ -81,13 +83,16 @@ export function BookPage() {
       return { ...m, [roomId]: arr };
     });
   };
+  const clearRoom = (roomId: number) => {
+    setGuestMap((m) => ({ ...m, [roomId]: [null] }));
+  };
 
   const selectedRooms = rooms.filter((r) => chosenIn(r.id).length > 0);
   const allChosen = rooms.flatMap((r) => chosenIn(r.id));
   const blockedIds = new Set(Object.keys(avail?.blockedRooms ?? {}).map(Number));
 
-  // What approvals will this need? Family rooms need that side's admin,
-  // the Loft either side, holidays and whole-ranch bookings both sides.
+  // Family rooms need that side's admin, the Loft either side,
+  // holidays and whole-ranch bookings both sides.
   const admins = users.filter((u) => u.role === 'admin');
   const adminNames = (family: 'clore' | 'gabriel') =>
     admins.filter((a) => a.family === family).map((a) => a.name).join(' or ') || `${family} admin`;
@@ -97,10 +102,14 @@ export function BookPage() {
   const needsGabriel = fullRanch || sides.has('gabriel') || isHoliday;
   const needsEither = !needsClore && !needsGabriel && sides.has('shared');
 
+  // Whole-ranch bookings hold every room, so every room needs a person in it.
+  const emptyRooms = fullRanch ? rooms.filter((r) => chosenIn(r.id).length === 0) : [];
+
   const canSubmit =
     validDates &&
     allChosen.length > 0 &&
     (fullRanch || selectedRooms.length > 0) &&
+    emptyRooms.length === 0 &&
     !avail?.fullRanchBlocked &&
     (!fullRanch || !avail?.anyBooking) &&
     (fullRanch || selectedRooms.every((r) => !blockedIds.has(r.id)));
@@ -124,15 +133,7 @@ export function BookPage() {
       qc.invalidateQueries({ queryKey: ['bookings'] });
       qc.invalidateQueries({ queryKey: ['booking', editId] });
       qc.invalidateQueries({ queryKey: ['pending-count'] });
-      toast(
-        d.booking.status === 'approved'
-          ? editId
-            ? 'Booking updated — you’re all set!'
-            : 'Booked — you’re all set!'
-          : editId
-            ? 'Booking updated — sent for approval'
-            : 'Booking requested — sent for approval'
-      );
+      toast(editId ? 'Booking updated — sent for approval' : 'Booking requested — sent for approval');
       navigate(`/booking/${d.booking.id}`);
     },
     onError: (e) => toast(e instanceof Error ? e.message : 'Could not save booking', 'error'),
@@ -145,111 +146,78 @@ export function BookPage() {
   const rightRooms = rooms.filter((r) => r.side === 'clore');
   const loft = rooms.find((r) => r.side === 'shared');
 
-  const renderSelects = (room: Room) => {
+  const roomTile = (room: Room, cls: string) => {
     const blocked = !fullRanch && blockedIds.has(room.id);
-    if (blocked) {
-      const info = avail!.blockedRooms[room.id];
-      return (
-        <div className="room-blocked-note">
-          Booked by {info.by}
-          {info.guests.length > 0 && <> — {info.guests.join(', ')}</>} ({info.status})
-        </div>
-      );
-    }
-    const selects = selectsFor(room.id);
+    const info = blocked ? avail!.blockedRooms[room.id] : null;
+    const chosen = chosenIn(room.id);
+    const selected = fullRanch || chosen.length > 0;
     return (
-      <>
-        {selects.map((val, idx) => (
-          <select
-            key={idx}
-            className="guest-select"
-            value={val ?? ''}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (v === '__add') {
-                setAddNameTarget({ roomId: room.id, idx });
-              } else {
-                setGuest(room.id, idx, v === '' ? null : Number(v));
-              }
-            }}
-          >
-            <option value="">— guest —</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name}
-              </option>
+      <button
+        key={room.id}
+        type="button"
+        className={`room-tile ${cls} ${room.side} ${selected ? 'selected' : ''} ${blocked ? 'blocked' : ''}`}
+        disabled={blocked}
+        onClick={() => setOpenRoomId(room.id)}
+      >
+        <span className="room-name">
+          <span className={`side-dot side-${room.side}`} />
+          {room.name}
+        </span>
+        {room.key === 'master1' && <span className="room-sub">Jimmy &amp; Lynn's room</span>}
+        {blocked ? (
+          <span className="tile-state">
+            Booked · {info!.by}
+            {info!.guests.length > 0 && <> — {info!.guests.join(', ')}</>}
+          </span>
+        ) : chosen.length > 0 ? (
+          <span className="tile-pills">
+            {chosen.map((uid, i) => (
+              <span key={i} className="guest-pill">
+                {nameOf(uid)}
+              </span>
             ))}
-            <option value="__add">＋ Add a name…</option>
-          </select>
-        ))}
-        {selects.length < 4 && (
-          <button type="button" className="add-guest-btn" onClick={() => addSelect(room.id)}>
-            ＋ add another guest
-          </button>
+          </span>
+        ) : fullRanch ? (
+          <span className="tile-state needs-guest">Needs a guest — tap to add</span>
+        ) : (
+          <span className="tile-state open">Open · tap to add guests</span>
         )}
-      </>
-    );
-  };
-
-  const roomCell = (room: Room, sideClass: string) => {
-    const blocked = !fullRanch && blockedIds.has(room.id);
-    const selected = fullRanch || chosenIn(room.id).length > 0;
-    return (
-      <div key={room.id} className={`room-cell ${sideClass} ${room.side} ${selected ? 'selected' : ''} ${blocked ? 'blocked' : ''}`}>
-        <div>
-          <div className="room-name">
-            <span className={`side-dot side-${room.side}`} />
-            {room.name}
-          </div>
-          {room.key === 'master1' && <div className="room-sub">Jimmy &amp; Lynn's room</div>}
-        </div>
-        {renderSelects(room)}
-      </div>
+      </button>
     );
   };
 
   return (
     <div className="stack">
       {editId && editData?.booking && (
-        <div className="banner banner-info">
-          Editing booking #{editId} — saving will send it back for approval.
-        </div>
+        <div className="banner banner-info">Editing booking #{editId} — saving sends it back for approval.</div>
       )}
 
-      <div className="dates-row">
-        <label className="field">
-          From (arrive)
-          <input className="input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-        </label>
-        <label className="field">
-          To (depart)
-          <input className="input" type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} />
-        </label>
+      <div className="card">
+        <div className="dates-row">
+          <label className="field">
+            Arrive
+            <input className="input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          </label>
+          <label className="field">
+            Depart
+            <input className="input" type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} />
+          </label>
+        </div>
+        {!validDates && <p className="muted small" style={{ margin: '8px 2px 0' }}>Pick an arrival day and a later departure day.</p>}
       </div>
-      {!validDates && <div className="muted small">Pick an arrival and a later departure day. Departure day frees the room for the next family.</div>}
 
       {avail?.holiday && (
-        <div className="banner banner-holiday">★ {avail.holiday} — holiday stays need an admin from both families to approve.</div>
+        <div className="banner banner-holiday">★ {avail.holiday} — holiday stays need an admin from both families.</div>
       )}
       {avail?.fullRanchBlocked && (
         <div className="banner banner-error">
-          The whole ranch is booked by {avail.fullRanchBlocked.by} ({avail.fullRanchBlocked.status}) {avail.fullRanchBlocked.start} →{' '}
-          {avail.fullRanchBlocked.end}. Pick different dates.
+          The whole ranch is booked by {avail.fullRanchBlocked.by} ({avail.fullRanchBlocked.status}){' '}
+          {avail.fullRanchBlocked.start} → {avail.fullRanchBlocked.end}. Pick different dates.
         </div>
       )}
       {fullRanch && avail?.anyBooking && !avail.fullRanchBlocked && (
         <div className="banner banner-error">Someone already has a room booked in these dates, so the whole ranch can't be reserved.</div>
       )}
-
-      <label className="book-all">
-        <input type="checkbox" checked={fullRanch} onChange={(e) => setFullRanch(e.target.checked)} />
-        <span>
-          Book ALL rooms — reserve the whole ranch
-          <div className="muted small" style={{ fontWeight: 500 }}>
-            Nobody else can book any room these dates. Needs a Clore and a Gabriel admin.
-          </div>
-        </span>
-      </label>
 
       <div className="house">
         <div className="house-living">LIVING / KITCHEN</div>
@@ -260,28 +228,31 @@ export function BookPage() {
         <div className="house-grid">
           {leftRooms.map((r, i) => (
             <span key={r.id} style={{ display: 'contents' }}>
-              {roomCell(r, 'left')}
-              {rightRooms[i] && roomCell(rightRooms[i], 'right')}
+              {roomTile(r, 'left')}
+              {rightRooms[i] && roomTile(rightRooms[i], 'right')}
             </span>
           ))}
         </div>
-        {loft && (
-          <div className={`loft-cell ${fullRanch || chosenIn(loft.id).length > 0 ? 'selected' : ''} ${!fullRanch && blockedIds.has(loft.id) ? 'blocked' : ''}`}>
-            <div className="room-name">
-              <span className="side-dot side-shared" />
-              {loft.name}
-              <span className="muted small" style={{ fontWeight: 500 }}>· barn — either family</span>
-            </div>
-            {renderSelects(loft)}
-          </div>
-        )}
+        {loft && roomTile(loft, 'wide')}
       </div>
+
+      <label className="book-all">
+        <input type="checkbox" checked={fullRanch} onChange={(e) => setFullRanch(e.target.checked)} />
+        <span>
+          Reserve the whole ranch
+          <span className="muted small book-all-sub">Holds every room — and every room needs at least one guest.</span>
+        </span>
+      </label>
+      {fullRanch && emptyRooms.length > 0 && (
+        <div className="banner banner-info">
+          {emptyRooms.length} room{emptyRooms.length === 1 ? ' still needs' : 's still need'} a guest before you can submit:{' '}
+          {emptyRooms.map((r) => r.name).join(', ')}.
+        </div>
+      )}
 
       {(needsClore || needsGabriel || needsEither) && allChosen.length > 0 && (
         <div className="card">
-          <div className="small" style={{ fontWeight: 700, marginBottom: 6 }}>
-            Approval needed from:
-          </div>
+          <div className="card-title">Approval needed from</div>
           <div className="needs-line">
             {needsClore && <span className="chip chip-side-clore">Clore — {adminNames('clore')}</span>}
             {needsGabriel && <span className="chip chip-side-gabriel">Gabriel — {adminNames('gabriel')}</span>}
@@ -303,34 +274,63 @@ export function BookPage() {
           {mutation.isPending ? 'Sending…' : editId ? 'Save changes' : 'Submit booking'}
         </button>
       </div>
-      {allChosen.length === 0 && <div className="muted small" style={{ textAlign: 'center' }}>Add at least one guest to a room to submit.</div>}
+      {allChosen.length === 0 && (
+        <p className="muted small" style={{ textAlign: 'center', margin: 0 }}>
+          Tap a room and add at least one guest to submit.
+        </p>
+      )}
 
-      <AddNameSheet
-        open={!!addNameTarget}
-        onClose={() => setAddNameTarget(null)}
-        onAdded={(u) => {
-          if (addNameTarget) setGuest(addNameTarget.roomId, addNameTarget.idx, u.id);
-          setAddNameTarget(null);
-        }}
-      />
+      <Sheet open={!!openRoom} onClose={() => setOpenRoomId(null)} title={openRoom?.name}>
+        {openRoom && (
+          <RoomEditor
+            room={openRoom}
+            users={users}
+            selects={selectsFor(openRoom.id)}
+            setGuest={(idx, v) => setGuest(openRoom.id, idx, v)}
+            addSelect={() => addSelect(openRoom.id)}
+            clearRoom={() => clearRoom(openRoom.id)}
+            onDone={() => setOpenRoomId(null)}
+          />
+        )}
+      </Sheet>
     </div>
   );
 }
 
-function AddNameSheet({ open, onClose, onAdded }: { open: boolean; onClose: () => void; onAdded: (u: User) => void }) {
-  const [name, setName] = useState('');
+function RoomEditor({
+  room,
+  users,
+  selects,
+  setGuest,
+  addSelect,
+  clearRoom,
+  onDone,
+}: {
+  room: Room;
+  users: User[];
+  selects: (number | null)[];
+  setGuest: (idx: number, value: number | null) => void;
+  addSelect: () => void;
+  clearRoom: () => void;
+  onDone: () => void;
+}) {
   const toast = useToast();
   const qc = useQueryClient();
+  const [addingIdx, setAddingIdx] = useState<number | null>(null);
+  const [newName, setNewName] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const save = async () => {
+  const sideLabel = room.side === 'shared' ? 'The barn · either family approves' : `${room.side === 'clore' ? 'Clore' : 'Gabriel'} side`;
+
+  const saveName = async () => {
     setBusy(true);
     try {
-      const d = await api.post<{ user: User }>('/api/users', { name: name.trim() });
+      const d = await api.post<{ user: User }>('/api/users', { name: newName.trim() });
       await qc.invalidateQueries({ queryKey: ['users'] });
+      if (addingIdx !== null) setGuest(addingIdx, d.user.id);
       toast(`${d.user.name} added to the family list`);
-      setName('');
-      onAdded(d.user);
+      setAddingIdx(null);
+      setNewName('');
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Could not add name', 'error');
     } finally {
@@ -339,12 +339,76 @@ function AddNameSheet({ open, onClose, onAdded }: { open: boolean; onClose: () =
   };
 
   return (
-    <Sheet open={open} onClose={onClose} title="Add a name">
-      <p className="muted small">They'll show up in every guest dropdown from now on.</p>
-      <input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="First name" onKeyDown={(e) => e.key === 'Enter' && name.trim().length >= 2 && save()} />
-      <button className="btn btn-primary btn-block" disabled={busy || name.trim().length < 2} onClick={save}>
-        Add name
-      </button>
-    </Sheet>
+    <div className="stack">
+      <span className={`chip chip-side-${room.side}`} style={{ alignSelf: 'flex-start' }}>
+        {sideLabel}
+      </span>
+
+      {addingIdx === null ? (
+        <>
+          {selects.map((val, idx) => (
+            <select
+              key={idx}
+              className="guest-select"
+              value={val ?? ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === '__add') setAddingIdx(idx);
+                else setGuest(idx, v === '' ? null : Number(v));
+              }}
+            >
+              <option value="">— guest —</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+              <option value="__add">＋ Add a new name…</option>
+            </select>
+          ))}
+          {selects.length < 4 && (
+            <button type="button" className="add-guest-btn" onClick={addSelect}>
+              ＋ add another guest
+            </button>
+          )}
+          <div className="row">
+            <button
+              className="btn btn-block"
+              onClick={() => {
+                clearRoom();
+                onDone();
+              }}
+            >
+              Clear room
+            </button>
+            <button className="btn btn-primary btn-block" onClick={onDone}>
+              Done
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="muted small" style={{ margin: 0 }}>
+            They'll show up in every guest dropdown from now on.
+          </p>
+          <input
+            className="input"
+            autoFocus
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="First name"
+            onKeyDown={(e) => e.key === 'Enter' && newName.trim().length >= 2 && saveName()}
+          />
+          <div className="row">
+            <button className="btn btn-block" onClick={() => setAddingIdx(null)}>
+              Back
+            </button>
+            <button className="btn btn-primary btn-block" disabled={busy || newName.trim().length < 2} onClick={saveName}>
+              Add name
+            </button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
