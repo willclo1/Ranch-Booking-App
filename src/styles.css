@@ -454,10 +454,11 @@ label.field > * {
 .sheet {
   width: 100%;
   max-width: 640px;
-  /* The overlay is lifted by --kb-inset, so the room left above the keyboard is
-     100dvh minus that. Cap to it (less a small margin) so the sheet can never
-     run off the top, while still using the full space the keyboard leaves. */
-  max-height: min(86dvh, calc(100dvh - var(--kb-inset, 0px) - 24px));
+  /* The overlay is lifted by --kb-inset, so keep the sheet inside what is left
+     above the keyboard AND leave a strip of backdrop above it — filling the
+     whole gap made it stretch nearly to the top of the screen. At rest the
+     inset is 0 and this resolves to plain 86dvh, so nothing changes there. */
+  max-height: min(86dvh, calc(100dvh - var(--kb-inset, 0px) - 14dvh));
   background: var(--bg);
   border-radius: 20px 20px 0 0;
   padding: 8px 16px calc(20px + env(safe-area-inset-bottom, 0px));
@@ -1035,7 +1036,7 @@ label.field > * {
   /* Fixed on purpose. Keying this to --kb-inset meant the list re-laid out on
      every frame of the keyboard animation, fighting the sheet's own movement.
      The sheet body scrolls, so a static cap is enough. */
-  max-height: 34dvh;
+  max-height: 26dvh;
   overflow-y: auto;
   overscroll-behavior: contain;
   border: 1px solid var(--line);
