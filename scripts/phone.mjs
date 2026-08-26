@@ -10,7 +10,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { networkInterfaces } from 'node:os';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import qrcode from 'qrcode-terminal';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -67,4 +67,4 @@ console.log('  Press Ctrl+C to stop the server.');
 console.log('============================================================\n');
 
 // 3. Start the server (also creates/migrates the database).
-await import(join(root, 'server', 'index.js').replace(/\\/g, '/'));
+await import(pathToFileURL(join(root, 'server', 'index.js')).href);
