@@ -57,7 +57,8 @@ export function BookPage() {
     }
   }, [editData, loadedEdit]);
 
-  const validDates = !!startDate && !!endDate && startDate < endDate;
+  const isPast = !!startDate && startDate < todayISO();
+  const validDates = !!startDate && !!endDate && startDate < endDate && !isPast;
   const { data: avail } = useQuery({
     queryKey: ['availability', startDate, endDate, editId],
     queryFn: () =>
@@ -113,6 +114,20 @@ export function BookPage() {
     !avail?.fullRanchBlocked &&
     (!fullRanch || !avail?.anyBooking) &&
     (fullRanch || selectedRooms.every((r) => !blockedIds.has(r.id)));
+
+  const submitHint = isPast
+    ? 'Pick dates from today onward'
+    : !validDates
+      ? 'Pick your dates'
+      : avail?.fullRanchBlocked
+        ? 'Those dates are taken'
+        : fullRanch && avail?.anyBooking
+          ? 'Someone already booked a room'
+          : emptyRooms.length > 0
+            ? `${emptyRooms.length} room${emptyRooms.length === 1 ? '' : 's'} still need a guest`
+            : allChosen.length === 0
+              ? 'Tap a room to add guests'
+              : '';
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -196,14 +211,27 @@ export function BookPage() {
         <div className="dates-row">
           <label className="field">
             Arrive
-            <input className="input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            <input
+              className="input"
+              type="date"
+              value={startDate}
+              min={todayISO()}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
           </label>
           <label className="field">
             Depart
-            <input className="input" type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} />
+            <input
+              className="input"
+              type="date"
+              value={endDate}
+              min={startDate > todayISO() ? startDate : todayISO()}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
           </label>
         </div>
-        {!validDates && <p className="muted small" style={{ margin: '8px 2px 0' }}>Pick an arrival day and a later departure day.</p>}
+        {isPast && <p className="muted small" style={{ margin: '8px 2px 0', color: 'var(--bad)' }}>Those dates are in the past — pick today or later.</p>}
+        {!isPast && !validDates && <p className="muted small" style={{ margin: '8px 2px 0' }}>Pick an arrival day and a later departure day.</p>}
       </div>
 
       {avail?.holiday && (
@@ -266,19 +294,24 @@ export function BookPage() {
         <textarea className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything the admins should know" />
       </label>
 
-      <div className="row">
-        <button className="btn btn-block" onClick={() => navigate(-1)}>
+      {/* spacer so the sticky action bar never covers the notes field */}
+      <div style={{ height: 78 }} />
+
+      <div className="action-bar">
+        <button className="btn" onClick={() => navigate(-1)}>
           Cancel
         </button>
-        <button className="btn btn-primary btn-block" disabled={!canSubmit || mutation.isPending} onClick={() => mutation.mutate()}>
-          {mutation.isPending ? 'Sending…' : editId ? 'Save changes' : 'Submit booking'}
-        </button>
+        <div className="action-main">
+          <button
+            className="btn btn-primary btn-block"
+            disabled={!canSubmit || mutation.isPending}
+            onClick={() => mutation.mutate()}
+          >
+            {mutation.isPending ? 'Sending…' : editId ? 'Save changes' : 'Submit booking'}
+          </button>
+          {!canSubmit && <span className="action-hint">{submitHint}</span>}
+        </div>
       </div>
-      {allChosen.length === 0 && (
-        <p className="muted small" style={{ textAlign: 'center', margin: 0 }}>
-          Tap a room and add at least one guest to submit.
-        </p>
-      )}
 
       <Sheet open={!!openRoom} onClose={() => setOpenRoomId(null)} title={openRoom?.name}>
         {openRoom && (

@@ -92,8 +92,8 @@ function Header() {
     '/': 'La Grange, Texas',
     '/calendar': 'Calendar',
     '/book': 'Book a stay',
-    '/lists': 'Lists',
-    '/more': 'More',
+    '/lists': 'Lists & checklists',
+    '/more': 'Your account',
   };
   const title = titles[location.pathname] ?? (location.pathname.startsWith('/booking') ? 'Booking' : titles['/']);
   return (
@@ -143,10 +143,10 @@ function BottomNav() {
       </NavLink>
       <NavLink to="/more" className="nav-item">
         <span className="nav-icon-wrap">
-          <MenuIcon />
+          <PersonIcon />
           {admin && pendingCount > 0 && <span className="nav-badge">{pendingCount}</span>}
         </span>
-        <span>More</span>
+        <span>Account</span>
       </NavLink>
     </nav>
   );
@@ -180,8 +180,9 @@ const ListIcon = () => (
     <circle cx="4.5" cy="18" r="1.4" fill="currentColor" stroke="none" />
   </svg>
 );
-const MenuIcon = () => (
-  <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <path d="M4 7h16M4 12h16M4 17h16" />
+const PersonIcon = () => (
+  <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="8" r="3.6" />
+    <path d="M4.8 20a7.2 7.2 0 0 1 14.4 0" />
   </svg>
 );

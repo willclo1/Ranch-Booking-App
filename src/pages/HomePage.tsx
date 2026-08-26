@@ -71,7 +71,7 @@ export function HomePage() {
             ))}
             {pending.length > 3 && (
               <Link to="/more" className="muted small" style={{ textAlign: 'center' }}>
-                +{pending.length - 3} more in the approvals inbox
+                +{pending.length - 3} more in your approvals inbox
               </Link>
             )}
           </div>

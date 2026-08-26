@@ -16,6 +16,12 @@
   --shared: #5f7042;
   --shared-soft: #e4e9d5;
 
+  /* calendar bar colors — each state gets its own distinct hue */
+  --both: #4f4a55;
+  --ranch: #6b4e8f;
+  --pending-bar: #e0a52e;
+  --pending-ink: #2b2016;
+
   --ok: #3f7d4e;
   --warn: #b9862e;
   --bad: #a13c2e;
@@ -36,12 +42,17 @@
     --accent: #c98b4b;
     --accent-ink: #1b1510;
 
-    --clore: #d0604e;
+    --clore: #c1553f;
     --clore-soft: #43241f;
-    --gabriel: #6b9fc4;
+    --gabriel: #45789f;
     --gabriel-soft: #1f3242;
-    --shared: #94a86b;
+    --shared: #5f7a3f;
     --shared-soft: #2c3320;
+
+    --both: #8b8494;
+    --ranch: #9575c4;
+    --pending-bar: #e5b155;
+    --pending-ink: #1b1510;
 
     --ok: #6db480;
     --warn: #d8a44a;
@@ -575,6 +586,12 @@ label.field > * {
   opacity: 0.35;
   background: transparent;
 }
+.cal-day.past {
+  background: transparent;
+  color: var(--muted);
+  opacity: 0.45;
+  cursor: default;
+}
 .cal-day.busy {
   background: color-mix(in srgb, var(--card-2) 70%, var(--card));
 }
@@ -655,10 +672,10 @@ label.field > * {
   background: var(--shared);
 }
 .bar-mixed {
-  background: var(--accent);
+  background: var(--both);
 }
 .bar-full {
-  background: linear-gradient(100deg, var(--clore), var(--gabriel));
+  background: var(--ranch);
 }
 .bar-more {
   background: var(--card-2);
@@ -666,30 +683,16 @@ label.field > * {
   border: 1px solid var(--line);
   text-align: center;
 }
+/* Pending is its own color, whatever rooms it holds — dashed as a second cue.
+   Declared last (and without .cal-bar) so it wins over the side colors on bars
+   AND still paints the standalone legend swatch. */
+.bar-pending {
+  background: var(--pending-bar);
+  color: var(--pending-ink);
+}
 .cal-bar.bar-pending {
-  opacity: 0.9;
+  border-color: color-mix(in srgb, var(--pending-ink) 45%, transparent);
   border-style: dashed;
-}
-.cal-bar.bar-pending.bar-clore {
-  background: var(--clore-soft);
-  color: var(--clore);
-  border-color: var(--clore);
-}
-.cal-bar.bar-pending.bar-gabriel {
-  background: var(--gabriel-soft);
-  color: var(--gabriel);
-  border-color: var(--gabriel);
-}
-.cal-bar.bar-pending.bar-shared {
-  background: var(--shared-soft);
-  color: var(--shared);
-  border-color: var(--shared);
-}
-.cal-bar.bar-pending.bar-mixed,
-.cal-bar.bar-pending.bar-full {
-  background: color-mix(in srgb, var(--warn) 16%, var(--card));
-  color: var(--warn);
-  border-color: var(--warn);
 }
 .bar-swatch {
   width: 22px;
@@ -701,6 +704,7 @@ label.field > * {
 }
 .bar-swatch.bar-pending {
   border-style: dashed;
+  border-color: color-mix(in srgb, var(--pending-ink) 55%, transparent);
 }
 .cal-legend {
   display: flex;
@@ -734,6 +738,35 @@ label.field > * {
   gap: 10px;
   animation: toast-in 0.2s ease;
 }
+/* Sticky submit bar (booking form) — always reachable without scrolling */
+.action-bar {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 10px);
+  width: min(94vw, 612px);
+  z-index: 25;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 8px 28px rgba(20, 14, 8, 0.22);
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.action-main {
+  flex: 1;
+  min-width: 0;
+}
+.action-hint {
+  display: block;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
 .select-dates {
   font-family: Georgia, 'Times New Roman', serif;
   font-weight: 800;

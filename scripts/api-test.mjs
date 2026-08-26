@@ -1,4 +1,4 @@
-// End-to-end API rule tests. Spawns its own server on a throwaway database,
+﻿// End-to-end API rule tests. Spawns its own server on a throwaway database,
 // so it never touches the real family data. Run with: npm test
 import { spawn } from 'node:child_process';
 import { rmSync, mkdtempSync } from 'node:fs';
@@ -34,6 +34,22 @@ for (let i = 0; ; i++) {
 }
 
 let pass = 0, fail = 0;
+
+// All booking dates are anchored to NEXT year so the suite never rots as time passes.
+const Y = new Date().getFullYear() + 1;
+const d = (mmdd) => `${Y}-${mmdd}`;
+/** 4th Thursday of November in year Y (Thanksgiving) as YYYY-MM-DD. */
+const thanksgiving = (() => {
+  const first = new Date(Date.UTC(Y, 10, 1));
+  const offset = (4 - first.getUTCDay() + 7) % 7; // 4 = Thursday
+  const day = 1 + offset + 21;
+  return `${Y}-11-${String(day).padStart(2, '0')}`;
+})();
+const dayAfter = (iso, n) => {
+  const t = new Date(iso + 'T00:00:00Z');
+  t.setUTCDate(t.getUTCDate() + n);
+  return t.toISOString().slice(0, 10);
+};
 
 function check(name, cond, extra = '') {
   if (cond) { pass++; console.log(`  ok  ${name}`); }
@@ -102,13 +118,13 @@ check('register needs a 4-digit code', r.status === 400);
 const roomsRes = await will.get('/api/rooms');
 const rooms = Object.fromEntries(roomsRes.data.rooms.map((x) => [x.key, x]));
 check('7 rooms', roomsRes.data.rooms.length === 7);
-// A guest in every room — required for whole-ranch bookings (user ids 1-7 are seeded).
+// A guest in every room - required for whole-ranch bookings (user ids 1-7 are seeded).
 const allRoomGuests = roomsRes.data.rooms.map((rm, i) => ({ roomId: rm.id, guestIds: [i + 1] }));
 
 // --- Booking: gabriel room only, non-holiday ---
 console.log('\n--- gabriel room booking (Oct 2-4, no holiday) ---');
 r = await will.post('/api/bookings', {
-  startDate: '2026-10-02', endDate: '2026-10-04',
+  startDate: d('10-02'), endDate: d('10-04'),
   rooms: [{ roomId: rooms.guest3.id, guestIds: [5, 6] }],
 });
 const b1 = r.data.booking;
@@ -128,39 +144,45 @@ check('gabriel admin approval approves it', r.data.booking.status === 'approved'
 // --- Conflicts ---
 console.log('\n--- conflicts ---');
 r = await erin.post('/api/bookings', {
-  startDate: '2026-10-03', endDate: '2026-10-05',
+  startDate: d('10-03'), endDate: d('10-05'),
   rooms: [{ roomId: rooms.guest3.id, guestIds: [6] }],
 });
 check('overlapping same room blocked (409)', r.status === 409, JSON.stringify(r.data));
 
 r = await erin.post('/api/bookings', {
-  startDate: '2026-10-04', endDate: '2026-10-06',
+  startDate: `${Y - 2}-06-01`, endDate: `${Y - 2}-06-03`,
+  rooms: [{ roomId: rooms.guest4.id, guestIds: [6] }],
+});
+check('past dates rejected', r.status === 400, JSON.stringify(r.data));
+
+r = await erin.post('/api/bookings', {
+  startDate: d('10-04'), endDate: d('10-06'),
   rooms: [{ roomId: rooms.guest3.id, guestIds: [6] }],
 });
 check('same-day turnover allowed (start on checkout day)', r.status === 201);
 const bTurnover = r.data.booking;
 
 r = await erin.post('/api/bookings', {
-  startDate: '2026-10-03', endDate: '2026-10-05',
+  startDate: d('10-03'), endDate: d('10-05'),
   rooms: [{ roomId: rooms.guest1.id, guestIds: [6] }],
 });
 check('same person in two overlapping bookings blocked', r.status === 409, JSON.stringify(r.data));
 
 r = await erin.post('/api/bookings', {
-  startDate: '2026-10-03', endDate: '2026-10-05',
+  startDate: d('10-03'), endDate: d('10-05'),
   rooms: [{ roomId: rooms.guest1.id, guestIds: [7] }, { roomId: rooms.guest2.id, guestIds: [7] }],
 });
 check('same person in two rooms of one booking blocked', r.status === 400);
 
 r = await erin.post('/api/bookings', {
-  startDate: '2026-10-03', endDate: '2026-10-05',
+  startDate: d('10-03'), endDate: d('10-05'),
   rooms: [{ roomId: rooms.guest1.id, guestIds: [7] }],
 });
 check('different room same dates allowed', r.status === 201);
 const bOther = r.data.booking;
 
 r = await will.post('/api/bookings', {
-  startDate: '2026-10-01', endDate: '2026-10-08', isFullRanch: true,
+  startDate: d('10-01'), endDate: d('10-08'), isFullRanch: true,
   rooms: allRoomGuests,
 });
 check('full-ranch over existing bookings blocked', r.status === 409);
@@ -168,13 +190,13 @@ check('full-ranch over existing bookings blocked', r.status === 409);
 // --- Full ranch on clear dates ---
 console.log('\n--- full ranch (Nov 6-8) ---');
 r = await will.post('/api/bookings', {
-  startDate: '2026-11-06', endDate: '2026-11-08', isFullRanch: true,
+  startDate: d('11-06'), endDate: d('11-08'), isFullRanch: true,
   rooms: [{ roomId: rooms.master1.id, guestIds: [5] }],
 });
 check('full ranch with empty rooms rejected', r.status === 400);
 
 r = await will.post('/api/bookings', {
-  startDate: '2026-11-06', endDate: '2026-11-08', isFullRanch: true,
+  startDate: d('11-06'), endDate: d('11-08'), isFullRanch: true,
   rooms: allRoomGuests,
 });
 const bFull = r.data.booking;
@@ -183,7 +205,7 @@ check('full ranch holds all 7 rooms', bFull.rooms.length === 7);
 check('needs both sides', bFull.needs.clore && bFull.needs.gabriel);
 
 r = await erin.post('/api/bookings', {
-  startDate: '2026-11-07', endDate: '2026-11-09',
+  startDate: d('11-07'), endDate: d('11-09'),
   rooms: [{ roomId: rooms.loft.id, guestIds: [6] }],
 });
 check('pending full-ranch blocks other bookings', r.status === 409);
@@ -196,7 +218,7 @@ check('both sides approve full ranch', r.data.booking.status === 'approved');
 // --- Loft only: either admin ---
 console.log('\n--- loft-only booking ---');
 r = await erin.post('/api/bookings', {
-  startDate: '2026-10-09', endDate: '2026-10-11',
+  startDate: d('10-09'), endDate: d('10-11'),
   rooms: [{ roomId: rooms.loft.id, guestIds: [6, 10] }],
 });
 const bLoft = r.data.booking;
@@ -204,10 +226,10 @@ check('loft-only needs either', bLoft.needs.either === true && !bLoft.needs.clor
 r = await jimmy.post(`/api/bookings/${bLoft.id}/decide`, { decision: 'approved' });
 check('any admin approves loft', r.data.booking.status === 'approved');
 
-// --- Holiday: Thanksgiving 2026 (Nov 26) ---
+// --- Holiday: Thanksgiving (4th Thursday of November) ---
 console.log('\n--- holiday booking (Thanksgiving) ---');
 r = await will.post('/api/bookings', {
-  startDate: '2026-11-25', endDate: '2026-11-27',
+  startDate: thanksgiving, endDate: dayAfter(thanksgiving, 2),
   rooms: [{ roomId: rooms.guest1.id, guestIds: [5] }],
 });
 const bHol = r.data.booking;
@@ -217,14 +239,14 @@ check('holiday needs both sides even for clore-only room', bHol.needs.clore && b
 // --- Edit resets approvals ---
 console.log('\n--- edit re-approval ---');
 r = await will.patch(`/api/bookings/${b1.id}`, {
-  startDate: '2026-10-02', endDate: '2026-10-04',
+  startDate: d('10-02'), endDate: d('10-04'),
   rooms: [{ roomId: rooms.guest3.id, guestIds: [5] }],
 });
 check('edit approved booking -> pending again', r.data.booking.status === 'pending', JSON.stringify(r.data));
 check('approvals cleared on edit', r.data.booking.approvals.length === 0);
 
 r = await erin.patch(`/api/bookings/${b1.id}`, {
-  startDate: '2026-10-02', endDate: '2026-10-04',
+  startDate: d('10-02'), endDate: d('10-04'),
   rooms: [{ roomId: rooms.guest3.id, guestIds: [6] }],
 });
 check('non-owner non-admin cannot edit', r.status === 403);
@@ -233,7 +255,7 @@ check('non-owner non-admin cannot edit', r.status === 403);
 r = await kevin.post(`/api/bookings/${bTurnover.id}/decide`, { decision: 'rejected', note: 'Ranch maintenance' });
 check('rejection rejects booking', r.data.booking.status === 'rejected');
 r = await erin.post('/api/bookings', {
-  startDate: '2026-10-04', endDate: '2026-10-06',
+  startDate: d('10-04'), endDate: d('10-06'),
   rooms: [{ roomId: rooms.guest3.id, guestIds: [6] }],
 });
 check('rejected booking releases dates', r.status === 201);
@@ -294,3 +316,4 @@ check('unused guest can be deleted', r.status === 200);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 shutdown(fail > 0 ? 1 : 0);
+

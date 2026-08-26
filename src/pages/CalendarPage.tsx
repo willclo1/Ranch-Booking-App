@@ -58,6 +58,7 @@ export function CalendarPage() {
   // Tap once to pick your arrival day, tap again to pick departure.
   // Tapping the same day clears; tapping with a full range starts over.
   const onDayTap = (iso: string) => {
+    if (iso < todayISO()) return; // the past isn't bookable
     if (!sel) {
       setSel({ start: iso, end: iso });
     } else if (sel.start === sel.end) {
@@ -181,10 +182,12 @@ export function CalendarPage() {
                   const hasBookings = bookingsOn(c.iso).length > 0;
                   const inSel = sel && sel.start <= c.iso && c.iso <= sel.end;
                   const selEdge = sel && (c.iso === sel.start || c.iso === sel.end);
+                  const past = c.iso < todayISO();
                   return (
                     <button
                       key={c.iso}
-                      className={`cal-day ${c.inMonth ? '' : 'out'} ${c.isToday ? 'today' : ''} ${hasBookings ? 'busy' : ''} ${inSel ? 'sel' : ''} ${selEdge ? 'sel-edge' : ''}`}
+                      className={`cal-day ${c.inMonth ? '' : 'out'} ${past ? 'past' : ''} ${c.isToday ? 'today' : ''} ${hasBookings ? 'busy' : ''} ${inSel ? 'sel' : ''} ${selEdge ? 'sel-edge' : ''}`}
+                      disabled={past}
                       onClick={() => onDayTap(c.iso)}
                     >
                       <span className="cal-day-num">{c.day}</span>
@@ -235,10 +238,13 @@ export function CalendarPage() {
           <span className="bar-swatch bar-shared" /> Loft
         </span>
         <span className="row">
+          <span className="bar-swatch bar-mixed" /> Both sides
+        </span>
+        <span className="row">
           <span className="bar-swatch bar-full" /> Whole ranch
         </span>
         <span className="row">
-          <span className="bar-swatch bar-clore bar-pending" /> pending
+          <span className="bar-swatch bar-pending" /> Pending
         </span>
         <span className="row">★ holiday</span>
       </div>
@@ -282,15 +288,17 @@ export function CalendarPage() {
                 />
               ))
             )}
-            <button
-              className="btn btn-primary btn-block"
-              onClick={() => {
-                setSelectedDay(null);
-                navigate(`/book?start=${selectedDay}`);
-              }}
-            >
-              Book this date
-            </button>
+            {selectedDay >= todayISO() && (
+              <button
+                className="btn btn-primary btn-block"
+                onClick={() => {
+                  setSelectedDay(null);
+                  navigate(`/book?start=${selectedDay}`);
+                }}
+              >
+                Book this date
+              </button>
+            )}
           </>
         )}
       </Sheet>

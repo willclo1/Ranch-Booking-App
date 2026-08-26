@@ -145,7 +145,7 @@ export function BookingDetailPage() {
         {phoneless.length > 0 && (
           <p className="muted small" style={{ margin: 0 }}>
             {textable.length > 0 ? 'Also waiting: ' : 'Waiting on: '}
-            {phoneless.map((a) => a.name).join(' & ')} — no phone number saved yet (add it under More → People to enable tap-to-text).
+            {phoneless.map((a) => a.name).join(' & ')} — no phone number saved yet (add it under Account → People to enable tap-to-text).
           </p>
         )}
 
@@ -234,7 +234,7 @@ function ChecklistAccordion({ bookingId, type, title }: { bookingId: number; typ
       </summary>
       <div className="acc-body">
         {items.length === 0 && (
-          <p className="muted small">No items yet — anyone can add them under More → Checklists.</p>
+          <p className="muted small">No items yet — anyone can add them under Lists → Checklists.</p>
         )}
         {items.map((item) => (
           <div key={item.id} className="list-item">

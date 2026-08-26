@@ -7,6 +7,12 @@ export const bookings = Router();
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** Today in the server's local timezone as YYYY-MM-DD (the ranch's timezone). */
+function localToday() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function isAdminish(user) {
   return user.role === 'admin' || user.role === 'sysadmin';
 }
@@ -150,6 +156,7 @@ function parseBody(db, body) {
   const { startDate, endDate } = body;
   if (!DATE_RE.test(startDate || '') || !DATE_RE.test(endDate || '')) throw new Err(400, 'Pick valid dates');
   if (startDate >= endDate) throw new Err(400, 'Departure must be after arrival');
+  if (startDate < localToday()) throw new Err(400, "That arrival date has already passed — pick today or later");
   const isFullRanch = !!body.isFullRanch;
   const allRooms = db.prepare('SELECT id, name, side, requires_approval FROM rooms').all();
   const roomById = new Map(allRooms.map((r) => [r.id, r]));
