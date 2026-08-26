@@ -98,25 +98,32 @@ export function BookPage() {
   const needsGabriel = fullRanch || sides.has('gabriel') || isHoliday;
   const needsEither = !needsClore && !needsGabriel && sides.has('shared');
 
-  // Whole-ranch bookings hold every room, so every room needs a person in it.
-  const emptyRooms = fullRanch ? rooms.filter((r) => chosenIn(r.id).length === 0) : [];
+  // The Loft is the barn and books on its own, so "the whole ranch" holds the
+  // house rooms only. It can still be added on top by putting a guest in it.
+  const houseRooms = rooms.filter((r) => r.side !== 'shared');
+  const heldByFullRanch = (r: Room) => fullRanch && r.side !== 'shared';
+  const effectiveRooms = rooms.filter((r) => heldByFullRanch(r) || chosenIn(r.id).length > 0);
+  const takesHouseRoom = effectiveRooms.some((r) => r.side !== 'shared');
+
+  // Every room the booking holds needs a person in it.
+  const emptyRooms = fullRanch ? houseRooms.filter((r) => chosenIn(r.id).length === 0) : [];
 
   const canSubmit =
     validDates &&
     allChosen.length > 0 &&
-    (fullRanch || selectedRooms.length > 0) &&
+    effectiveRooms.length > 0 &&
     emptyRooms.length === 0 &&
-    !avail?.fullRanchBlocked &&
-    (!fullRanch || !avail?.anyBooking) &&
-    (fullRanch || selectedRooms.every((r) => !blockedIds.has(r.id)));
+    (!takesHouseRoom || !avail?.fullRanchBlocked) &&
+    (!fullRanch || !avail?.anyHouseBooking) &&
+    effectiveRooms.every((r) => heldByFullRanch(r) || !blockedIds.has(r.id));
 
   const submitHint = isPast
     ? 'Pick dates from today onward'
     : !validDates
       ? 'Pick your dates'
-      : avail?.fullRanchBlocked
+      : takesHouseRoom && avail?.fullRanchBlocked
         ? 'Those dates are taken'
-        : fullRanch && avail?.anyBooking
+        : fullRanch && avail?.anyHouseBooking
           ? 'Someone already booked a room'
           : emptyRooms.length > 0
             ? `${emptyRooms.length} room${emptyRooms.length === 1 ? '' : 's'} still need a guest`
@@ -157,10 +164,10 @@ export function BookPage() {
   const loft = rooms.find((r) => r.side === 'shared');
 
   const roomTile = (room: Room, cls: string) => {
-    const blocked = !fullRanch && blockedIds.has(room.id);
+    const blocked = !heldByFullRanch(room) && blockedIds.has(room.id);
     const info = blocked ? avail!.blockedRooms[room.id] : null;
     const chosen = chosenIn(room.id);
-    const selected = fullRanch || chosen.length > 0;
+    const selected = heldByFullRanch(room) || chosen.length > 0;
     return (
       <button
         key={room.id}
@@ -235,11 +242,12 @@ export function BookPage() {
       {avail?.fullRanchBlocked && (
         <div className="banner banner-error">
           The whole ranch is booked by {avail.fullRanchBlocked.by} ({avail.fullRanchBlocked.status}){' '}
-          {avail.fullRanchBlocked.start} → {avail.fullRanchBlocked.end}. Pick different dates.
+          {avail.fullRanchBlocked.start} → {avail.fullRanchBlocked.end}.{' '}
+          {blockedIds.has(loft?.id ?? -1) ? 'Pick different dates.' : 'The Loft is still free on these dates.'}
         </div>
       )}
-      {fullRanch && avail?.anyBooking && !avail.fullRanchBlocked && (
-        <div className="banner banner-error">Someone already has a room booked in these dates, so the whole ranch can't be reserved.</div>
+      {fullRanch && avail?.anyHouseBooking && !avail.fullRanchBlocked && (
+        <div className="banner banner-error">Someone already has a house room booked in these dates, so the whole ranch can't be reserved.</div>
       )}
 
       <div className="house">
@@ -263,7 +271,9 @@ export function BookPage() {
         <input type="checkbox" checked={fullRanch} onChange={(e) => setFullRanch(e.target.checked)} />
         <span>
           Reserve the whole ranch
-          <span className="muted small book-all-sub">Holds every room — and every room needs at least one guest.</span>
+          <span className="muted small book-all-sub">
+            Holds all six house rooms, each of which needs a guest. The Loft is separate — add it too if you want it.
+          </span>
         </span>
       </label>
       {fullRanch && emptyRooms.length > 0 && (
@@ -414,10 +424,14 @@ function RoomEditor({
       )}
 
       <input
-        className="input"
+        className="input guest-search"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Search names, or type a new one…"
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="words"
+        spellCheck={false}
       />
 
       <div className="person-list">

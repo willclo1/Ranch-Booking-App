@@ -21,6 +21,31 @@ export function Sheet({ open, onClose, title, children }: SheetProps) {
     };
   }, [open, onClose]);
 
+  // Keep the sheet above the on-screen keyboard.
+  //
+  // The keyboard shrinks the VISUAL viewport but not the LAYOUT viewport, and
+  // `position: fixed` plus `dvh` both follow the layout one — so without this
+  // the sheet stays anchored to the bottom of the screen, behind the keyboard.
+  // The focused input then ends up underneath it and the browser starts
+  // scrolling the page around trying to reveal it. Measuring the overlap and
+  // lifting the sheet by exactly that much keeps the field in place.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!open || !vv) return;
+    const apply = () => {
+      const overlap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      document.documentElement.style.setProperty('--kb-inset', `${Math.round(overlap)}px`);
+    };
+    apply();
+    vv.addEventListener('resize', apply);
+    vv.addEventListener('scroll', apply);
+    return () => {
+      vv.removeEventListener('resize', apply);
+      vv.removeEventListener('scroll', apply);
+      document.documentElement.style.removeProperty('--kb-inset');
+    };
+  }, [open]);
+
   if (!open) return null;
 
   return createPortal(

@@ -60,6 +60,8 @@ export interface Availability {
   fullRanchBlocked: null | { bookingId: number; by: string; status: string; start: string; end: string };
   blockedRooms: Record<string, { bookingId: number; status: string; guests: string[]; by: string }>;
   anyBooking: boolean;
+  /** Overlapping stays that hold a house room. A Loft-only booking is not one. */
+  anyHouseBooking: boolean;
   holiday: string | null;
 }
 

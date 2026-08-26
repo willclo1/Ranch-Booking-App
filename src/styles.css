@@ -441,16 +441,25 @@ label.field > * {
   display: flex;
   align-items: flex-end;
   justify-content: center;
+  /* --kb-inset is the height the on-screen keyboard covers, measured from the
+     visual viewport in Sheet.tsx. Padding the overlay lifts the sheet clear. */
+  padding-bottom: var(--kb-inset, 0px);
+  transition: padding-bottom 0.15s ease-out;
 }
 .sheet {
   width: 100%;
   max-width: 640px;
-  max-height: 86dvh;
-  overflow-y: auto;
+  max-height: calc(86dvh - var(--kb-inset, 0px));
   background: var(--bg);
   border-radius: 20px 20px 0 0;
   padding: 8px 16px calc(20px + env(safe-area-inset-bottom, 0px));
   animation: sheet-up 0.22s ease;
+  /* The body scrolls, not the whole sheet, so the grip and title stay put and
+     a sticky search field has something stable to stick to. */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  overscroll-behavior: contain;
 }
 @keyframes sheet-up {
   from {
@@ -474,6 +483,10 @@ label.field > * {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* ---------- login ---------- */
@@ -1002,9 +1015,20 @@ label.field > * {
   opacity: 0.75;
   font-size: 12px;
 }
+/* Pinned to the top of the scrolling sheet body so the roster scrolls under it
+   and the field you are typing into never leaves the screen. */
+.guest-search {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg);
+}
 .person-list {
-  max-height: 40dvh;
+  /* Give the list back to the keyboard when it is up, so the sheet does not
+     have to scroll to keep the search field and the first results together. */
+  max-height: max(24dvh, calc(40dvh - var(--kb-inset, 0px)));
   overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--card);

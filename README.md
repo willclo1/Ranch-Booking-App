@@ -36,8 +36,11 @@ Tests: `npm test` (runs the API rule suite against a throwaway database).
   from either family. One rejection rejects the booking.
 - **Holidays** — stays touching New Year's, Easter, Memorial Day, July 4th, Labor Day,
   Thanksgiving, or Christmas (incl. their weekends) need an admin from **both** families.
-- **Whole ranch** — the "Book ALL rooms" checkbox reserves every room and needs one admin
-  from each family. Nothing else can be booked over it.
+- **Whole ranch** — the "Reserve the whole ranch" checkbox holds the **six house rooms**
+  and needs one admin from each family. No other house room can be booked over it.
+  **The Loft is a special case**: it's the barn, so it isn't included and stays bookable
+  by someone else during a whole-ranch stay. Tick it deliberately (put a guest in it) if
+  you want the barn as well, and then it's held like any other room.
 - **No double-booking** — pending and approved bookings hold their dates; rejected or
   cancelled ones release them. Checkout day is a free turnover day (someone else can
   arrive the day you leave).

@@ -17,6 +17,20 @@ function isAdminish(user) {
   return user.role === 'admin' || user.role === 'sysadmin';
 }
 
+/**
+ * The Loft (the barn) is the only shared room, and it is booked independently of
+ * the house — "reserve the whole ranch" does not include it, and a whole-ranch
+ * stay does not block someone else from taking it.
+ */
+function isShared(room) {
+  return room.side === 'shared';
+}
+
+/** Rooms in the house proper — everything the whole-ranch option holds. */
+function houseRoomIds(db) {
+  return new Set(db.prepare(`SELECT id FROM rooms WHERE side != 'shared'`).all().map((r) => r.id));
+}
+
 /** Bookings that still hold dates. */
 const ACTIVE = `('pending','approved')`;
 
@@ -52,12 +66,14 @@ bookings.get('/availability', requireUser, (req, res) => {
   const excludeId = Number(exclude) || 0;
   const overlaps = overlapping(db, from, to, excludeId);
 
+  const house = houseRoomIds(db);
   let fullRanchBlocked = null;
   const blockedRooms = {};
   for (const b of overlaps) {
     if (b.is_full_ranch) {
       fullRanchBlocked = { bookingId: b.id, by: b.created_by_name, status: b.status, start: b.start_date, end: b.end_date };
-      continue;
+      // Fall through: a whole-ranch stay still needs its rooms marked taken so
+      // the Loft shows as free unless that booking actually included it.
     }
     for (const r of roomsOf(db, b.id)) {
       const guests = db
@@ -70,8 +86,11 @@ bookings.get('/availability', requireUser, (req, res) => {
     }
   }
   const anyBooking = overlaps.length > 0;
+  // Only stays holding a house room stop the whole ranch being reserved — a
+  // Loft-only booking does not.
+  const anyHouseBooking = overlaps.some((b) => roomsOf(db, b.id).some((r) => house.has(r.id)));
   const holiday = holidayForRange(from, to);
-  res.json({ fullRanchBlocked, blockedRooms, anyBooking, holiday });
+  res.json({ fullRanchBlocked, blockedRooms, anyBooking, anyHouseBooking, holiday });
 });
 
 /** Holiday windows for calendar shading. */
@@ -166,7 +185,11 @@ function parseBody(db, body) {
 
   let roomIds;
   if (isFullRanch) {
-    roomIds = allRooms.map((r) => r.id); // whole ranch: every room is held
+    // The Loft is the barn, not part of the house, so "the whole ranch" holds
+    // the six house rooms only. It can still be added deliberately on top by
+    // putting a guest in it.
+    const picked = new Set(roomEntries.map((r) => Number(r.roomId)));
+    roomIds = allRooms.filter((r) => !isShared(r) || picked.has(r.id)).map((r) => r.id);
   } else {
     roomIds = [...new Set(roomEntries.map((r) => Number(r.roomId)))];
     if (roomIds.length === 0) throw new Err(400, 'Select at least one room');
@@ -216,21 +239,32 @@ class Err extends Error {
 
 function checkConflicts(db, { startDate, endDate, isFullRanch, roomIds }, excludeId = 0) {
   const overlaps = overlapping(db, startDate, endDate, excludeId);
-  for (const b of overlaps) {
-    if (b.is_full_ranch) {
-      throw new Err(409, `The whole ranch is already booked ${b.start_date} to ${b.end_date} by ${b.created_by_name} (${b.status}).`);
+  const house = houseRoomIds(db);
+  const wantsHouseRoom = roomIds.some((id) => house.has(id));
+
+  // A whole-ranch booking holds the house, so it only blocks stays that want a
+  // house room. The Loft stays bookable underneath it.
+  if (wantsHouseRoom) {
+    const full = overlaps.find((b) => b.is_full_ranch);
+    if (full) {
+      throw new Err(409, `The whole ranch is already booked ${full.start_date} to ${full.end_date} by ${full.created_by_name} (${full.status}).`);
     }
   }
-  if (isFullRanch && overlaps.length > 0) {
-    const b = overlaps[0];
-    throw new Err(409, `Can't book the whole ranch: ${b.created_by_name} already has a booking ${b.start_date} to ${b.end_date} (${b.status}).`);
+
+  // Likewise, a Loft-only stay does not stop anyone reserving the whole ranch.
+  if (isFullRanch) {
+    const clash = overlaps.find((b) => roomsOf(db, b.id).some((r) => house.has(r.id)));
+    if (clash) {
+      throw new Err(409, `Can't book the whole ranch: ${clash.created_by_name} already has a room booked ${clash.start_date} to ${clash.end_date} (${clash.status}).`);
+    }
   }
-  if (!isFullRanch) {
-    for (const b of overlaps) {
-      const taken = roomsOf(db, b.id).filter((r) => roomIds.includes(r.id));
-      if (taken.length > 0) {
-        throw new Err(409, `${taken.map((r) => r.name).join(', ')} already booked ${b.start_date} to ${b.end_date} by ${b.created_by_name} (${b.status}).`);
-      }
+
+  // Room-by-room check runs for every booking, so the Loft is protected whether
+  // or not this stay is a whole-ranch one.
+  for (const b of overlaps) {
+    const taken = roomsOf(db, b.id).filter((r) => roomIds.includes(r.id));
+    if (taken.length > 0) {
+      throw new Err(409, `${taken.map((r) => r.name).join(', ')} already booked ${b.start_date} to ${b.end_date} by ${b.created_by_name} (${b.status}).`);
     }
   }
 }

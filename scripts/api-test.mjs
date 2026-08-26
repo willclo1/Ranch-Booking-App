@@ -120,6 +120,11 @@ const rooms = Object.fromEntries(roomsRes.data.rooms.map((x) => [x.key, x]));
 check('7 rooms', roomsRes.data.rooms.length === 7);
 // A guest in every room - required for whole-ranch bookings (user ids 1-7 are seeded).
 const allRoomGuests = roomsRes.data.rooms.map((rm, i) => ({ roomId: rm.id, guestIds: [i + 1] }));
+// The six house rooms only. "Reserve the whole ranch" holds these; the Loft is
+// a special case that books on its own.
+const houseRoomGuests = roomsRes.data.rooms
+  .filter((rm) => rm.side !== 'shared')
+  .map((rm, i) => ({ roomId: rm.id, guestIds: [i + 1] }));
 
 // --- Booking: gabriel room only, non-holiday ---
 console.log('\n--- gabriel room booking (Oct 2-4, no holiday) ---');
@@ -201,7 +206,7 @@ r = await will.post('/api/bookings', {
 });
 const bFull = r.data.booking;
 check('full ranch created (guest in every room)', r.status === 201, JSON.stringify(r.data));
-check('full ranch holds all 7 rooms', bFull.rooms.length === 7);
+check('full ranch with the loft added holds all 7 rooms', bFull.rooms.length === 7);
 check('needs both sides', bFull.needs.clore && bFull.needs.gabriel);
 
 r = await erin.post('/api/bookings', {
@@ -214,6 +219,47 @@ r = await jimmy.post(`/api/bookings/${bFull.id}/decide`, { decision: 'approved' 
 check('one side not enough for full ranch', r.data.booking.status === 'pending');
 r = await kevin.post(`/api/bookings/${bFull.id}/decide`, { decision: 'approved' });
 check('both sides approve full ranch', r.data.booking.status === 'approved');
+
+// --- The Loft is not part of "the whole ranch" ---
+console.log('\n--- whole ranch excludes the loft ---');
+r = await will.post('/api/bookings', {
+  startDate: d('09-10'), endDate: d('09-12'), isFullRanch: true,
+  rooms: houseRoomGuests,
+});
+const bHouse = r.data.booking;
+check('whole ranch created with only house guests', r.status === 201, JSON.stringify(r.data));
+check('whole ranch holds just the 6 house rooms', bHouse.rooms.length === 6);
+check('whole ranch does not include the loft', !bHouse.rooms.some((rm) => rm.side === 'shared'));
+
+r = await erin.post('/api/bookings', {
+  startDate: d('09-10'), endDate: d('09-12'),
+  rooms: [{ roomId: rooms.loft.id, guestIds: [10] }],
+});
+check('loft still bookable during a whole-ranch stay', r.status === 201, JSON.stringify(r.data));
+
+// ...and the reverse: a loft stay must not block reserving the whole ranch.
+r = await erin.post('/api/bookings', {
+  startDate: d('09-18'), endDate: d('09-20'),
+  rooms: [{ roomId: rooms.loft.id, guestIds: [10] }],
+});
+check('loft-only booking on clear dates', r.status === 201);
+r = await will.post('/api/bookings', {
+  startDate: d('09-18'), endDate: d('09-20'), isFullRanch: true,
+  rooms: houseRoomGuests,
+});
+check('whole ranch allowed alongside a loft booking', r.status === 201, JSON.stringify(r.data));
+
+// Adding the loft to a whole-ranch stay on purpose still holds it against others.
+r = await will.post('/api/bookings', {
+  startDate: d('09-24'), endDate: d('09-26'), isFullRanch: true,
+  rooms: allRoomGuests,
+});
+check('whole ranch can still include the loft deliberately', r.status === 201 && r.data.booking.rooms.length === 7, JSON.stringify(r.data));
+r = await erin.post('/api/bookings', {
+  startDate: d('09-24'), endDate: d('09-26'),
+  rooms: [{ roomId: rooms.loft.id, guestIds: [10] }],
+});
+check('loft blocked when the whole-ranch stay included it', r.status === 409);
 
 // --- Loft only: either admin ---
 console.log('\n--- loft-only booking ---');
