@@ -1,0 +1,262 @@
+// End-to-end API rule tests. Spawns its own server on a throwaway database,
+// so it never touches the real family data. Run with: npm test
+import { spawn } from 'node:child_process';
+import { rmSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PORT = 4949;
+const BASE = `http://localhost:${PORT}`;
+const tmpDir = mkdtempSync(join(tmpdir(), 'ranch-test-'));
+const testDb = join(tmpDir, 'test.db');
+
+const server = spawn(process.execPath, [join(__dirname, '..', 'server', 'index.js')], {
+  env: { ...process.env, PORT: String(PORT), RANCH_DB: testDb },
+  stdio: 'ignore',
+});
+function shutdown(code) {
+  server.kill();
+  setTimeout(() => {
+    try { rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+    process.exit(code);
+  }, 300);
+}
+// Wait for the server to come up
+for (let i = 0; ; i++) {
+  try {
+    const res = await fetch(`${BASE}/api/health`);
+    if (res.ok) break;
+  } catch {}
+  if (i > 50) { console.error('Test server never came up'); shutdown(1); }
+  await new Promise((r) => setTimeout(r, 100));
+}
+
+let pass = 0, fail = 0;
+
+function check(name, cond, extra = '') {
+  if (cond) { pass++; console.log(`  ok  ${name}`); }
+  else { fail++; console.log(`FAIL  ${name} ${extra}`); }
+}
+
+class Session {
+  constructor() { this.cookie = null; }
+  async req(method, path, body) {
+    const res = await fetch(BASE + path, {
+      method,
+      headers: { 'Content-Type': 'application/json', ...(this.cookie ? { Cookie: this.cookie } : {}) },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const setCookie = res.headers.get('set-cookie');
+    if (setCookie) this.cookie = setCookie.split(';')[0];
+    let data = null;
+    try { data = await res.json(); } catch {}
+    return { status: res.status, data };
+  }
+  get(p) { return this.req('GET', p); }
+  post(p, b) { return this.req('POST', p, b ?? {}); }
+  patch(p, b) { return this.req('PATCH', p, b); }
+}
+
+const will = new Session();
+const jimmy = new Session();
+const kevin = new Session();
+const erin = new Session();
+
+// --- Auth ---
+console.log('\n--- auth ---');
+let r = await will.post('/api/auth/setup-pin', { userId: 5, pin: '1111' });
+if (r.status === 400) r = await will.post('/api/auth/login', { userId: 5, pin: '1111' });
+check('Will signs in', r.status === 200 && r.data.user.name === 'Will', JSON.stringify(r.data));
+
+r = await jimmy.post('/api/auth/setup-pin', { userId: 1, pin: '2222' });
+if (r.status === 400) r = await jimmy.post('/api/auth/login', { userId: 1, pin: '2222' });
+check('Jimmy signs in (clore admin)', r.status === 200 && r.data.user.role === 'admin');
+
+r = await kevin.post('/api/auth/setup-pin', { userId: 3, pin: '3333' });
+if (r.status === 400) r = await kevin.post('/api/auth/login', { userId: 3, pin: '3333' });
+check('Kevin signs in (gabriel admin)', r.status === 200 && r.data.user.family === 'gabriel');
+
+r = await erin.post('/api/auth/setup-pin', { userId: 6, pin: '4444' });
+if (r.status === 400) r = await erin.post('/api/auth/login', { userId: 6, pin: '4444' });
+check('Erin signs in (regular user)', r.status === 200);
+
+r = await will.post('/api/auth/login', { userId: 5, pin: '9999' });
+check('Wrong PIN rejected', r.status === 401);
+
+r = await new Session().post('/api/auth/setup-pin', { userId: 10, pin: '12345' });
+check('non-4-digit PIN rejected', r.status === 400);
+
+// --- Rooms ---
+const roomsRes = await will.get('/api/rooms');
+const rooms = Object.fromEntries(roomsRes.data.rooms.map((x) => [x.key, x]));
+check('7 rooms', roomsRes.data.rooms.length === 7);
+
+// --- Booking: gabriel room only, non-holiday ---
+console.log('\n--- gabriel room booking (Oct 2-4, no holiday) ---');
+r = await will.post('/api/bookings', {
+  startDate: '2026-10-02', endDate: '2026-10-04',
+  rooms: [{ roomId: rooms.guest3.id, guestIds: [5, 6] }],
+});
+const b1 = r.data.booking;
+check('created pending', r.status === 201 && b1.status === 'pending', JSON.stringify(r.data));
+check('needs gabriel only', b1.needs.gabriel === true && b1.needs.clore === false && b1.needs.either === false);
+check('not holiday', b1.isHoliday === false);
+
+r = await jimmy.post(`/api/bookings/${b1.id}/decide`, { decision: 'approved' });
+check('clore admin approval does NOT approve gabriel room', r.data.booking.status === 'pending');
+
+r = await erin.post(`/api/bookings/${b1.id}/decide`, { decision: 'approved' });
+check('regular user cannot decide', r.status === 403);
+
+r = await kevin.post(`/api/bookings/${b1.id}/decide`, { decision: 'approved' });
+check('gabriel admin approval approves it', r.data.booking.status === 'approved');
+
+// --- Conflicts ---
+console.log('\n--- conflicts ---');
+r = await erin.post('/api/bookings', {
+  startDate: '2026-10-03', endDate: '2026-10-05',
+  rooms: [{ roomId: rooms.guest3.id, guestIds: [6] }],
+});
+check('overlapping same room blocked (409)', r.status === 409, JSON.stringify(r.data));
+
+r = await erin.post('/api/bookings', {
+  startDate: '2026-10-04', endDate: '2026-10-06',
+  rooms: [{ roomId: rooms.guest3.id, guestIds: [6] }],
+});
+check('same-day turnover allowed (start on checkout day)', r.status === 201);
+const bTurnover = r.data.booking;
+
+r = await erin.post('/api/bookings', {
+  startDate: '2026-10-03', endDate: '2026-10-05',
+  rooms: [{ roomId: rooms.guest1.id, guestIds: [6] }],
+});
+check('different room same dates allowed', r.status === 201);
+const bOther = r.data.booking;
+
+r = await will.post('/api/bookings', {
+  startDate: '2026-10-01', endDate: '2026-10-08', isFullRanch: true,
+  rooms: [{ roomId: rooms.master1.id, guestIds: [5] }],
+});
+check('full-ranch over existing bookings blocked', r.status === 409);
+
+// --- Full ranch on clear dates ---
+console.log('\n--- full ranch (Nov 6-8) ---');
+r = await will.post('/api/bookings', {
+  startDate: '2026-11-06', endDate: '2026-11-08', isFullRanch: true,
+  rooms: [{ roomId: rooms.master1.id, guestIds: [5] }],
+});
+const bFull = r.data.booking;
+check('full ranch created', r.status === 201, JSON.stringify(r.data));
+check('full ranch holds all 7 rooms', bFull.rooms.length === 7);
+check('needs both sides', bFull.needs.clore && bFull.needs.gabriel);
+
+r = await erin.post('/api/bookings', {
+  startDate: '2026-11-07', endDate: '2026-11-09',
+  rooms: [{ roomId: rooms.loft.id, guestIds: [6] }],
+});
+check('pending full-ranch blocks other bookings', r.status === 409);
+
+r = await jimmy.post(`/api/bookings/${bFull.id}/decide`, { decision: 'approved' });
+check('one side not enough for full ranch', r.data.booking.status === 'pending');
+r = await kevin.post(`/api/bookings/${bFull.id}/decide`, { decision: 'approved' });
+check('both sides approve full ranch', r.data.booking.status === 'approved');
+
+// --- Loft only: either admin ---
+console.log('\n--- loft-only booking ---');
+r = await erin.post('/api/bookings', {
+  startDate: '2026-10-09', endDate: '2026-10-11',
+  rooms: [{ roomId: rooms.loft.id, guestIds: [6, 10] }],
+});
+const bLoft = r.data.booking;
+check('loft-only needs either', bLoft.needs.either === true && !bLoft.needs.clore && !bLoft.needs.gabriel);
+r = await jimmy.post(`/api/bookings/${bLoft.id}/decide`, { decision: 'approved' });
+check('any admin approves loft', r.data.booking.status === 'approved');
+
+// --- Holiday: Thanksgiving 2026 (Nov 26) ---
+console.log('\n--- holiday booking (Thanksgiving) ---');
+r = await will.post('/api/bookings', {
+  startDate: '2026-11-25', endDate: '2026-11-27',
+  rooms: [{ roomId: rooms.guest1.id, guestIds: [5] }],
+});
+const bHol = r.data.booking;
+check('thanksgiving flagged holiday', bHol.isHoliday === true && bHol.holidayName === 'Thanksgiving', JSON.stringify(bHol));
+check('holiday needs both sides even for clore-only room', bHol.needs.clore && bHol.needs.gabriel);
+
+// --- Edit resets approvals ---
+console.log('\n--- edit re-approval ---');
+r = await will.patch(`/api/bookings/${b1.id}`, {
+  startDate: '2026-10-02', endDate: '2026-10-04',
+  rooms: [{ roomId: rooms.guest3.id, guestIds: [5] }],
+});
+check('edit approved booking -> pending again', r.data.booking.status === 'pending', JSON.stringify(r.data));
+check('approvals cleared on edit', r.data.booking.approvals.length === 0);
+
+r = await erin.patch(`/api/bookings/${b1.id}`, {
+  startDate: '2026-10-02', endDate: '2026-10-04',
+  rooms: [{ roomId: rooms.guest3.id, guestIds: [6] }],
+});
+check('non-owner non-admin cannot edit', r.status === 403);
+
+// --- Rejection ---
+r = await kevin.post(`/api/bookings/${bTurnover.id}/decide`, { decision: 'rejected', note: 'Ranch maintenance' });
+check('rejection rejects booking', r.data.booking.status === 'rejected');
+r = await erin.post('/api/bookings', {
+  startDate: '2026-10-04', endDate: '2026-10-06',
+  rooms: [{ roomId: rooms.guest3.id, guestIds: [6] }],
+});
+check('rejected booking releases dates', r.status === 201);
+await will.post(`/api/bookings/${r.data.booking.id}/cancel`);
+
+// --- Cancel ---
+r = await erin.post(`/api/bookings/${bOther.id}/cancel`);
+check('creator can cancel', r.data.booking.status === 'cancelled');
+
+// --- Lists ---
+console.log('\n--- grocery + todo lists ---');
+r = await will.post('/api/lists/grocery', { text: 'Brisket rub' });
+const gId = r.data.id;
+check('grocery added', r.status === 201);
+r = await erin.post(`/api/lists/grocery/${gId}/done`);
+check('grocery marked bought', r.status === 200);
+r = await will.get('/api/lists/grocery?archived=1');
+const gItem = r.data.items.find((i) => i.id === gId);
+check('archive shows adder + buyer', gItem && gItem.addedBy === 'Will' && gItem.doneBy === 'Erin', JSON.stringify(gItem));
+r = await erin.post('/api/lists/todos', { text: 'Fix gate latch' });
+check('todo added', r.status === 201);
+const tId = r.data.id;
+r = await jimmy.req('DELETE', `/api/lists/todos/${tId}`);
+check('admin can delete others items', r.status === 200);
+
+// --- Checklists ---
+console.log('\n--- checklists ---');
+r = await will.post('/api/checklists/templates', { type: 'checkout', text: 'Take trash to the bin' });
+const ckTpl = r.data.id;
+check('template item added', r.status === 201);
+r = await will.post(`/api/checklists/booking/${bFull.id}/toggle`, { templateItemId: ckTpl });
+check('check recorded', r.data.checked === true);
+r = await will.get(`/api/checklists/booking/${bFull.id}`);
+const ckItem = r.data.checkout.find((i) => i.id === ckTpl);
+check('check shows who/when', ckItem.checked_by === 'Will' && !!ckItem.checked_at);
+r = await will.req('DELETE', `/api/checklists/templates/${ckTpl}`);
+check('template item deleted', r.status === 200);
+
+// --- Users ---
+console.log('\n--- users ---');
+r = await erin.post('/api/users', { name: 'Cousin Ray' });
+check('anyone can add a guest name', r.status === 201);
+const rayId = r.data.user.id;
+r = await erin.post('/api/users', { name: 'cousin ray' });
+check('duplicate name (case-insensitive) rejected', r.status === 409);
+r = await erin.patch(`/api/users/${rayId}`, { family: 'clore' });
+check('regular user cannot manage people', r.status === 403);
+r = await jimmy.patch(`/api/users/${rayId}`, { family: 'clore' });
+check('admin sets family side', r.status === 200 && r.data.user.family === 'clore');
+r = await jimmy.patch(`/api/users/${rayId}`, { role: 'admin' });
+check('admin cannot promote (sysadmin only)', r.status === 403);
+r = await jimmy.req('DELETE', `/api/users/${rayId}`);
+check('unused guest can be deleted', r.status === 200);
+
+console.log(`\n${pass} passed, ${fail} failed`);
+shutdown(fail > 0 ? 1 : 0);
