@@ -175,6 +175,17 @@ function parseBody(db, body) {
   }
   if (guests.length === 0) throw new Err(400, 'Add at least one guest');
 
+  // One room per person per stay, and no unknown guests.
+  const seenGuest = new Set();
+  for (const g of guests) {
+    const u = db.prepare('SELECT name FROM users WHERE id = ?').get(g.userId);
+    if (!u) throw new Err(400, 'Unknown guest selected');
+    if (seenGuest.has(g.userId)) {
+      throw new Err(400, `${u.name} can only be in one room for this stay`);
+    }
+    seenGuest.add(g.userId);
+  }
+
   // Every room in the booking must actually have a person in it —
   // a whole-ranch booking means every room, so every room needs a guest.
   const roomsWithGuests = new Set(guests.map((g) => g.roomId));
@@ -223,6 +234,27 @@ function checkConflicts(db, { startDate, endDate, isFullRanch, roomIds }, exclud
  *  - The Loft can be approved by an admin from either family.
  *  - Holiday stays and whole-ranch bookings need an admin from BOTH families.
  */
+/** A person can't be in two bookings at once — check guests against other active stays. */
+function checkGuestConflicts(db, parsed, excludeId = 0) {
+  const ids = [...new Set(parsed.guests.map((g) => g.userId))];
+  if (ids.length === 0) return;
+  const placeholders = ids.map(() => '?').join(',');
+  const clashes = db
+    .prepare(
+      `SELECT DISTINCT u.name, b.start_date, b.end_date
+       FROM booking_guests bg
+       JOIN bookings b ON b.id = bg.booking_id
+       JOIN users u ON u.id = bg.user_id
+       WHERE bg.user_id IN (${placeholders}) AND b.status IN ${ACTIVE} AND b.id != ?
+         AND b.start_date < ? AND ? < b.end_date`
+    )
+    .all(...ids, excludeId, parsed.endDate, parsed.startDate);
+  if (clashes.length > 0) {
+    const msg = clashes.map((c) => `${c.name} is already booked ${c.start_date} to ${c.end_date}`).join('; ');
+    throw new Err(409, `${msg}. One room per person at a time.`);
+  }
+}
+
 function computeNeeds(parsed) {
   const approvalSides = new Set(
     parsed.roomIds.filter((id) => parsed.roomById.get(id).requires_approval).map((id) => parsed.roomById.get(id).side)
@@ -248,6 +280,7 @@ bookings.post('/', requireUser, (req, res) => {
     const result = tx(db, () => {
       const parsed = parseBody(db, req.body);
       checkConflicts(db, parsed);
+      checkGuestConflicts(db, parsed);
       const needs = computeNeeds(parsed);
       const status = needs.needsClore || needs.needsGabriel || needs.needsEither ? 'pending' : 'approved';
       const info = db
@@ -282,6 +315,7 @@ bookings.patch('/:id', requireUser, (req, res) => {
     tx(db, () => {
       const parsed = parseBody(db, req.body);
       checkConflicts(db, parsed, id);
+      checkGuestConflicts(db, parsed, id);
       const needs = computeNeeds(parsed);
       db.prepare('DELETE FROM booking_rooms WHERE booking_id = ?').run(id);
       db.prepare('DELETE FROM booking_guests WHERE booking_id = ?').run(id);

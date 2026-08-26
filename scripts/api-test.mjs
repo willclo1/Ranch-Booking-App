@@ -88,6 +88,16 @@ check('Wrong PIN rejected', r.status === 401);
 r = await new Session().post('/api/auth/setup-pin', { userId: 10, pin: '12345' });
 check('non-4-digit PIN rejected', r.status === 400);
 
+const newbie = new Session();
+r = await newbie.post('/api/auth/register', { name: 'Cody', pin: '4321' });
+check('new user self-registers from sign-in screen', r.status === 200 && r.data.user.name === 'Cody', JSON.stringify(r.data));
+r = await newbie.get('/api/auth/me');
+check('registered user is signed in', r.status === 200);
+r = await new Session().post('/api/auth/register', { name: 'cody', pin: '9999' });
+check('register with taken name rejected', r.status === 409);
+r = await new Session().post('/api/auth/register', { name: 'Dee', pin: '12' });
+check('register needs a 4-digit code', r.status === 400);
+
 // --- Rooms ---
 const roomsRes = await will.get('/api/rooms');
 const rooms = Object.fromEntries(roomsRes.data.rooms.map((x) => [x.key, x]));
@@ -133,6 +143,18 @@ const bTurnover = r.data.booking;
 r = await erin.post('/api/bookings', {
   startDate: '2026-10-03', endDate: '2026-10-05',
   rooms: [{ roomId: rooms.guest1.id, guestIds: [6] }],
+});
+check('same person in two overlapping bookings blocked', r.status === 409, JSON.stringify(r.data));
+
+r = await erin.post('/api/bookings', {
+  startDate: '2026-10-03', endDate: '2026-10-05',
+  rooms: [{ roomId: rooms.guest1.id, guestIds: [7] }, { roomId: rooms.guest2.id, guestIds: [7] }],
+});
+check('same person in two rooms of one booking blocked', r.status === 400);
+
+r = await erin.post('/api/bookings', {
+  startDate: '2026-10-03', endDate: '2026-10-05',
+  rooms: [{ roomId: rooms.guest1.id, guestIds: [7] }],
 });
 check('different room same dates allowed', r.status === 201);
 const bOther = r.data.booking;

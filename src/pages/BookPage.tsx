@@ -286,6 +286,7 @@ export function BookPage() {
             room={openRoom}
             users={users}
             selects={selectsFor(openRoom.id)}
+            takenIds={new Set(allChosen)}
             setGuest={(idx, v) => setGuest(openRoom.id, idx, v)}
             addSelect={() => addSelect(openRoom.id)}
             clearRoom={() => clearRoom(openRoom.id)}
@@ -301,6 +302,7 @@ function RoomEditor({
   room,
   users,
   selects,
+  takenIds,
   setGuest,
   addSelect,
   clearRoom,
@@ -309,6 +311,7 @@ function RoomEditor({
   room: Room;
   users: User[];
   selects: (number | null)[];
+  takenIds: Set<number>;
   setGuest: (idx: number, value: number | null) => void;
   addSelect: () => void;
   clearRoom: () => void;
@@ -359,8 +362,9 @@ function RoomEditor({
             >
               <option value="">— guest —</option>
               {users.map((u) => (
-                <option key={u.id} value={u.id}>
+                <option key={u.id} value={u.id} disabled={takenIds.has(u.id) && u.id !== val}>
                   {u.name}
+                  {takenIds.has(u.id) && u.id !== val ? ' · already in this booking' : ''}
                 </option>
               ))}
               <option value="__add">＋ Add a new name…</option>

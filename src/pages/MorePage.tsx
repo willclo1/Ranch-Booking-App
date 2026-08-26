@@ -211,10 +211,21 @@ function PeopleManager() {
   const qc = useQueryClient();
   const toast = useToast();
   const { user: me } = useAuth();
+  const [newPerson, setNewPerson] = useState('');
 
   const { data } = useQuery({ queryKey: ['users'], queryFn: () => api.get<{ users: User[] }>('/api/users') });
   const refresh = () => qc.invalidateQueries({ queryKey: ['users'] });
   const onError = (e: unknown) => toast(e instanceof Error ? e.message : 'Failed', 'error');
+
+  const addPerson = useMutation({
+    mutationFn: () => api.post('/api/users', { name: newPerson.trim() }),
+    onSuccess: () => {
+      setNewPerson('');
+      refresh();
+      toast('Added — they set their own code on first sign-in');
+    },
+    onError,
+  });
 
   const patch = useMutation({
     mutationFn: (p: { id: number; body: Record<string, unknown> }) => api.patch(`/api/users/${p.id}`, p.body),
@@ -234,8 +245,20 @@ function PeopleManager() {
     <>
       <h3 className="section-title">People (admin)</h3>
       <p className="muted small" style={{ margin: '0 2px 4px' }}>
-        Add a phone number to an admin and they'll get a text when a booking needs their approval.
+        New people set their own 4-digit code the first time they sign in.
       </p>
+      <div className="add-row">
+        <input
+          className="input"
+          value={newPerson}
+          placeholder="Add a person…"
+          onChange={(e) => setNewPerson(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && newPerson.trim().length >= 2 && addPerson.mutate()}
+        />
+        <button className="btn btn-primary" disabled={newPerson.trim().length < 2 || addPerson.isPending} onClick={() => addPerson.mutate()}>
+          Add
+        </button>
+      </div>
       <div className="stack">
         {data?.users.map((u) => (
           <div key={u.id} className="card stack" style={{ gap: 8 }}>

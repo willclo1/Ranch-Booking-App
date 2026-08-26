@@ -33,6 +33,25 @@ auth.post('/setup-pin', (req, res) => {
   res.json({ user: { id: user.id, name: user.name, family: user.family, role: user.role } });
 });
 
+/** Self-signup from the sign-in screen: pick a name, create a code, you're in. */
+auth.post('/register', (req, res) => {
+  const name = String(req.body?.name || '').trim().slice(0, 40);
+  const { pin } = req.body || {};
+  if (name.length < 2) return res.status(400).json({ error: 'Name is too short' });
+  if (/sysadmin/i.test(name)) return res.status(400).json({ error: 'That name is reserved' });
+  if (!PIN_RE.test(String(pin || ''))) return res.status(400).json({ error: 'Code must be exactly 4 digits' });
+  const db = getDb();
+  const existing = db.prepare('SELECT id, name FROM users WHERE name = ? COLLATE NOCASE').get(name);
+  if (existing) {
+    return res.status(409).json({ error: `${existing.name} is already on the list — pick them from the dropdown instead` });
+  }
+  const info = db.prepare(`INSERT INTO users (name, role, pin_hash) VALUES (?, 'user', ?)`).run(name, hashPin(pin));
+  const user = db.prepare('SELECT id, name, family, role FROM users WHERE id = ?').get(Number(info.lastInsertRowid));
+  const token = createSession(user.id);
+  setSessionCookie(res, token);
+  res.json({ user });
+});
+
 auth.post('/login', (req, res) => {
   const { userId, pin } = req.body || {};
   const db = getDb();

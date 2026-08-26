@@ -77,10 +77,7 @@ export function BookingDetailPage() {
       : [];
   const textable = neededAdmins.filter((a) => a.phone);
   const phoneless = neededAdmins.filter((a) => !a.phone);
-  const roomsTxt = b.isFullRanch ? 'the whole ranch' : b.rooms.map((r) => r.name).join(', ');
-  const smsBody =
-    `AV Ranch: ${b.createdByName}'s booking of ${roomsTxt}, ${fmtRange(b.startDate, b.endDate)}, needs your approval` +
-    `${b.isHoliday ? ` (${b.holidayName} — both families sign off)` : ''}. Open: ${window.location.origin}/booking/${b.id}`;
+  const smsBody = `AV Ranch: ${b.createdByName}'s booking (${fmtRange(b.startDate, b.endDate)}) needs your approval — open the AV Ranch app to approve it.`;
 
   return (
     <div className="stack">

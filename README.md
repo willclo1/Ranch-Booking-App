@@ -44,8 +44,9 @@ Tests: `npm test` (runs the API rule suite against a throwaway database).
 - **Book from the calendar** — tap your arrival day, then your departure day; the range
   highlights and a bar appears that jumps straight into the booking form with those dates.
 - **Editing** a booking clears its approvals and sends it back through the flow.
-- Everyone signs in by tapping their name and setting a **4-digit PIN** on first use.
-  Admins can reset a PIN from More → People.
+- Everyone signs in by picking their name from a dropdown and typing a **4-digit code**
+  (created on first visit). Newcomers can add themselves right from the sign-in screen
+  ("I'm new here"), and admins can add people or reset a code from More → People.
 
 ## Sysadmin access (for testing)
 
