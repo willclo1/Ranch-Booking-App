@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
@@ -8,7 +8,8 @@ import { Sheet } from '../components/Sheet';
 import { Spinner } from '../components/bits';
 import type { Availability, Booking, Room, User } from '../types';
 
-type GuestMap = Record<number, (number | null)[]>;
+/** roomId -> the user ids staying in that room */
+type GuestMap = Record<number, number[]>;
 
 export function BookPage() {
   const { id } = useParams();
@@ -66,26 +67,20 @@ export function BookPage() {
     enabled: validDates,
   });
 
-  const selectsFor = (roomId: number): (number | null)[] => guestMap[roomId] ?? [null];
-  const chosenIn = (roomId: number) => selectsFor(roomId).filter((x): x is number => x !== null);
+  const chosenIn = (roomId: number): number[] => guestMap[roomId] ?? [];
   const nameOf = (uid: number) => users.find((u) => u.id === uid)?.name ?? '';
 
-  const setGuest = (roomId: number, idx: number, value: number | null) => {
+  const addGuest = (roomId: number, userId: number) => {
     setGuestMap((m) => {
-      const arr = [...(m[roomId] ?? [null])];
-      arr[idx] = value;
-      return { ...m, [roomId]: arr };
+      const arr = m[roomId] ?? [];
+      return arr.includes(userId) ? m : { ...m, [roomId]: [...arr, userId] };
     });
   };
-  const addSelect = (roomId: number) => {
-    setGuestMap((m) => {
-      const arr = [...(m[roomId] ?? [null])];
-      if (arr.length < 4) arr.push(null);
-      return { ...m, [roomId]: arr };
-    });
+  const removeGuest = (roomId: number, userId: number) => {
+    setGuestMap((m) => ({ ...m, [roomId]: (m[roomId] ?? []).filter((id) => id !== userId) }));
   };
   const clearRoom = (roomId: number) => {
-    setGuestMap((m) => ({ ...m, [roomId]: [null] }));
+    setGuestMap((m) => ({ ...m, [roomId]: [] }));
   };
 
   const selectedRooms = rooms.filter((r) => chosenIn(r.id).length > 0);
@@ -313,15 +308,15 @@ export function BookPage() {
         </div>
       </div>
 
-      <Sheet open={!!openRoom} onClose={() => setOpenRoomId(null)} title={openRoom?.name}>
+      <Sheet open={!!openRoom} onClose={() => setOpenRoomId(null)} title={openRoom ? `Who's in ${openRoom.name}?` : ''}>
         {openRoom && (
           <RoomEditor
             room={openRoom}
             users={users}
-            selects={selectsFor(openRoom.id)}
-            takenIds={new Set(allChosen)}
-            setGuest={(idx, v) => setGuest(openRoom.id, idx, v)}
-            addSelect={() => addSelect(openRoom.id)}
+            chosen={chosenIn(openRoom.id)}
+            takenElsewhere={new Set(allChosen.filter((id) => !chosenIn(openRoom.id).includes(id)))}
+            onAdd={(uid) => addGuest(openRoom.id, uid)}
+            onRemove={(uid) => removeGuest(openRoom.id, uid)}
             clearRoom={() => clearRoom(openRoom.id)}
             onDone={() => setOpenRoomId(null)}
           />
@@ -331,42 +326,53 @@ export function BookPage() {
   );
 }
 
+/**
+ * Room guest picker: who's in here shown as removable pills, plus a search box
+ * that filters the whole roster. Stays usable when the guest list runs long.
+ */
 function RoomEditor({
   room,
   users,
-  selects,
-  takenIds,
-  setGuest,
-  addSelect,
+  chosen,
+  takenElsewhere,
+  onAdd,
+  onRemove,
   clearRoom,
   onDone,
 }: {
   room: Room;
   users: User[];
-  selects: (number | null)[];
-  takenIds: Set<number>;
-  setGuest: (idx: number, value: number | null) => void;
-  addSelect: () => void;
+  chosen: number[];
+  takenElsewhere: Set<number>;
+  onAdd: (userId: number) => void;
+  onRemove: (userId: number) => void;
   clearRoom: () => void;
   onDone: () => void;
 }) {
   const toast = useToast();
   const qc = useQueryClient();
-  const [addingIdx, setAddingIdx] = useState<number | null>(null);
-  const [newName, setNewName] = useState('');
+  const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const sideLabel = room.side === 'shared' ? 'The barn · either family approves' : `${room.side === 'clore' ? 'Clore' : 'Gabriel'} side`;
+  const sideLabel =
+    room.side === 'shared' ? 'The barn · either family approves' : `${room.side === 'clore' ? 'Clore' : 'Gabriel'} side`;
 
-  const saveName = async () => {
+  const query = search.trim().toLowerCase();
+  const available = users.filter((u) => !chosen.includes(u.id) && !takenElsewhere.has(u.id));
+  const matches = query ? available.filter((u) => u.name.toLowerCase().includes(query)) : available;
+  const family = matches.filter((u) => !u.isGuest);
+  const guests = matches.filter((u) => u.isGuest);
+  const exactExists = users.some((u) => u.name.toLowerCase() === query);
+
+  const addNewGuest = async () => {
+    const name = search.trim();
     setBusy(true);
     try {
-      const d = await api.post<{ user: User }>('/api/users', { name: newName.trim() });
+      const d = await api.post<{ user: User }>('/api/users', { name });
       await qc.invalidateQueries({ queryKey: ['users'] });
-      if (addingIdx !== null) setGuest(addingIdx, d.user.id);
-      toast(`${d.user.name} added to the family list`);
-      setAddingIdx(null);
-      setNewName('');
+      onAdd(d.user.id);
+      toast(`${d.user.name} added as a guest`);
+      setSearch('');
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Could not add name', 'error');
     } finally {
@@ -374,78 +380,78 @@ function RoomEditor({
     }
   };
 
+  const personRow = (u: User) => (
+    <button key={u.id} type="button" className="person-row" onClick={() => onAdd(u.id)}>
+      <span>{u.name}</span>
+      <span className="person-add">＋</span>
+    </button>
+  );
+
   return (
     <div className="stack">
       <span className={`chip chip-side-${room.side}`} style={{ alignSelf: 'flex-start' }}>
         {sideLabel}
       </span>
 
-      {addingIdx === null ? (
-        <>
-          {selects.map((val, idx) => (
-            <select
-              key={idx}
-              className="guest-select"
-              value={val ?? ''}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (v === '__add') setAddingIdx(idx);
-                else setGuest(idx, v === '' ? null : Number(v));
-              }}
-            >
-              <option value="">— guest —</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id} disabled={takenIds.has(u.id) && u.id !== val}>
-                  {u.name}
-                  {takenIds.has(u.id) && u.id !== val ? ' · already in this booking' : ''}
-                </option>
-              ))}
-              <option value="__add">＋ Add a new name…</option>
-            </select>
-          ))}
-          {selects.length < 4 && (
-            <button type="button" className="add-guest-btn" onClick={addSelect}>
-              ＋ add another guest
-            </button>
-          )}
-          <div className="row">
-            <button
-              className="btn btn-block"
-              onClick={() => {
-                clearRoom();
-                onDone();
-              }}
-            >
-              Clear room
-            </button>
-            <button className="btn btn-primary btn-block" onClick={onDone}>
-              Done
-            </button>
-          </div>
-        </>
+      {chosen.length > 0 ? (
+        <div className="chosen-pills">
+          {chosen.map((uid) => {
+            const u = users.find((x) => x.id === uid);
+            return (
+              <button key={uid} type="button" className="chosen-pill" onClick={() => onRemove(uid)}>
+                {u?.name ?? 'Unknown'}
+                <span className="pill-x" aria-hidden="true">
+                  ✕
+                </span>
+              </button>
+            );
+          })}
+        </div>
       ) : (
-        <>
-          <p className="muted small" style={{ margin: 0 }}>
-            They'll show up in every guest dropdown from now on.
-          </p>
-          <input
-            className="input"
-            autoFocus
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="First name"
-            onKeyDown={(e) => e.key === 'Enter' && newName.trim().length >= 2 && saveName()}
-          />
-          <div className="row">
-            <button className="btn btn-block" onClick={() => setAddingIdx(null)}>
-              Back
-            </button>
-            <button className="btn btn-primary btn-block" disabled={busy || newName.trim().length < 2} onClick={saveName}>
-              Add name
-            </button>
-          </div>
-        </>
+        <p className="muted small" style={{ margin: 0 }}>
+          Nobody in this room yet — search below to add someone.
+        </p>
       )}
+
+      <input
+        className="input"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search names, or type a new one…"
+      />
+
+      <div className="person-list">
+        {family.length > 0 && <div className="person-group">Family</div>}
+        {family.map(personRow)}
+        {guests.length > 0 && <div className="person-group">Guests</div>}
+        {guests.map(personRow)}
+        {matches.length === 0 && (
+          <p className="muted small" style={{ padding: '10px 2px', margin: 0 }}>
+            {query ? `Nobody matching "${search.trim()}".` : 'Everyone is already placed in a room.'}
+          </p>
+        )}
+      </div>
+
+      {query.length >= 2 && !exactExists && (
+        <button type="button" className="btn btn-block" disabled={busy} onClick={addNewGuest}>
+          ＋ Add "{search.trim()}" as a guest
+          <span className="muted small" style={{ display: 'block', fontWeight: 500 }}>
+            Bookable name only — no sign-in
+          </span>
+        </button>
+      )}
+
+      <div className="row">
+        {chosen.length > 0 && (
+          <button className="btn btn-block" onClick={clearRoom}>
+            Clear room
+          </button>
+        )}
+        <button className="btn btn-primary btn-block" onClick={onDone}>
+          Done
+        </button>
+      </div>
     </div>
   );
 }
+

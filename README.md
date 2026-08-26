@@ -44,9 +44,14 @@ Tests: `npm test` (runs the API rule suite against a throwaway database).
 - **Book from the calendar** — tap your arrival day, then your departure day; the range
   highlights and a bar appears that jumps straight into the booking form with those dates.
 - **Editing** a booking clears its approvals and sends it back through the flow.
-- Everyone signs in by picking their name from a dropdown and typing a **4-digit code**
-  (created on first visit). Newcomers can add themselves right from the sign-in screen
-  ("I'm new here"), and admins can add people or reset a code from More → People.
+- **Family members** sign in by picking their name from a dropdown and typing a **4-digit
+  code** (created on first visit). Newcomers can add themselves from the sign-in screen
+  ("I'm new here"); admins can add people or reset a code from Account → People.
+- **Guests** are bookable names with no sign-in — kids, friends, in-laws. Add one straight
+  from the booking form ("＋ Add someone new…"). They appear in the room dropdowns and on
+  bookings, but never on the login screen. If a guest later wants an account they claim
+  their own name with "I'm new here" and keep their booking history; admins can flip anyone
+  between guest and family member in Account → People.
 
 ## Sysadmin access (for testing)
 
@@ -97,6 +102,8 @@ localhost) for full PWA features. On a plain home network you have two easy opti
 | Command | What it does |
 |---|---|
 | `npm run setup` | Create/verify the database (never overwrites existing data) |
+| `npm run reset-db` | Clear all bookings and lists, keep people and their codes |
+| `npm run reset-db -- --all` | Wipe everything back to a factory-fresh database |
 | `npm start` | Run the app (`PORT` env var to change the port, default 4848) |
 | `npm run dev` | Development mode with hot reload |
 | `npm test` | Run the 47-check API rule suite on a throwaway DB |

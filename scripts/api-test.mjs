@@ -299,6 +299,35 @@ console.log('\n--- users ---');
 r = await erin.post('/api/users', { name: 'Cousin Ray' });
 check('anyone can add a guest name', r.status === 201);
 const rayId = r.data.user.id;
+check('added name defaults to guest', r.data.user.isGuest === true, JSON.stringify(r.data));
+
+let people = (await new Session().get('/api/auth/people')).data.people;
+check('guest hidden from sign-in dropdown', !people.some((p) => p.id === rayId));
+check('family members still on sign-in dropdown', people.some((p) => p.name === 'Will'));
+check('guest appears in booking roster', (await erin.get('/api/users')).data.users.some((u) => u.id === rayId));
+
+r = await new Session().post('/api/auth/setup-pin', { userId: rayId, pin: '5555' });
+check('guest cannot create a sign-in code', r.status === 404);
+
+// A guest can still be booked into a room.
+r = await erin.post('/api/bookings', {
+  startDate: d('12-01'), endDate: d('12-03'),
+  rooms: [{ roomId: rooms.guest2.id, guestIds: [rayId] }],
+});
+check('guest can be booked into a room', r.status === 201, JSON.stringify(r.data));
+const bGuest = r.data.booking;
+check('guest name shows on the booking', bGuest.guests.some((g) => g.name === 'Cousin Ray'));
+await will.post(`/api/bookings/${bGuest.id}/cancel`);
+
+// Guests can later claim their own account, keeping their history.
+const ray = new Session();
+r = await ray.post('/api/auth/register', { name: 'Cousin Ray', pin: '5678' });
+check('guest can claim an account with the same name', r.status === 200 && r.data.user.id === rayId, JSON.stringify(r.data));
+people = (await new Session().get('/api/auth/people')).data.people;
+check('claimed guest now appears on sign-in', people.some((p) => p.id === rayId));
+
+r = await jimmy.patch(`/api/users/${rayId}`, { isGuest: true });
+check('admin can turn a member back into a guest', r.status === 200 && r.data.user.isGuest === true);
 r = await erin.post('/api/users', { name: 'cousin ray' });
 check('duplicate name (case-insensitive) rejected', r.status === 409);
 r = await erin.patch(`/api/users/${rayId}`, { family: 'clore' });
@@ -312,6 +341,11 @@ check('admin sets family side', r.status === 200 && r.data.user.family === 'clor
 r = await jimmy.patch(`/api/users/${rayId}`, { role: 'admin' });
 check('admin cannot promote (sysadmin only)', r.status === 403);
 r = await jimmy.req('DELETE', `/api/users/${rayId}`);
+check('guest with bookings cannot be deleted', r.status === 409, JSON.stringify(r.data));
+
+r = await erin.post('/api/users', { name: 'Typo Name' });
+const typoId = r.data.user.id;
+r = await jimmy.req('DELETE', `/api/users/${typoId}`);
 check('unused guest can be deleted', r.status === 200);
 
 console.log(`\n${pass} passed, ${fail} failed`);

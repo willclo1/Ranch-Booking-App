@@ -978,6 +978,96 @@ label.field > * {
   min-height: 44px;
   font-size: 14px;
 }
+/* Room guest picker — chosen people as removable pills + searchable roster */
+.chosen-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chosen-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: none;
+  border-radius: 99px;
+  padding: 7px 12px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 36px;
+}
+.chosen-pill .pill-x {
+  opacity: 0.75;
+  font-size: 12px;
+}
+.person-list {
+  max-height: 40dvh;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  padding: 4px;
+}
+.person-group {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 8px 8px 4px;
+}
+.person-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: none;
+  border: none;
+  border-radius: 9px;
+  padding: 11px 10px;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  min-height: 44px;
+}
+.person-row:active {
+  background: var(--card-2);
+}
+.person-add {
+  color: var(--accent);
+  font-weight: 800;
+  flex: none;
+}
+
+/* Compact guest rows in the admin drawer */
+.guest-rows {
+  max-height: 46dvh;
+  overflow-y: auto;
+}
+.guest-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 2px;
+  border-bottom: 1px solid var(--line);
+}
+.guest-row:last-child {
+  border-bottom: none;
+}
+.guest-row-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 650;
+  font-size: 14.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .add-guest-btn {
   align-self: flex-start;
   border: none;

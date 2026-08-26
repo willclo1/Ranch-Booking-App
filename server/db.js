@@ -9,6 +9,17 @@ export const DB_PATH = process.env.RANCH_DB || join(__dirname, '..', 'data', 'ra
 
 let db = null;
 
+/** Close the cached handle so the next getDb() opens the file fresh (used by reset-db). */
+export function closeDb() {
+  if (!db) return;
+  try {
+    db.close();
+  } catch {
+    /* already closed */
+  }
+  db = null;
+}
+
 export function getDb() {
   if (db) return db;
   mkdirSync(dirname(DB_PATH), { recursive: true });
@@ -29,6 +40,8 @@ function migrate(db) {
       role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user','admin','sysadmin')),
       pin_hash TEXT,
       phone TEXT,
+      -- guests are bookable names only: no sign-in, hidden from the login dropdown
+      is_guest INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -139,6 +152,9 @@ function migrate(db) {
   const userCols = db.prepare(`PRAGMA table_info(users)`).all().map((c) => c.name);
   if (!userCols.includes('phone')) {
     db.exec(`ALTER TABLE users ADD COLUMN phone TEXT`);
+  }
+  if (!userCols.includes('is_guest')) {
+    db.exec(`ALTER TABLE users ADD COLUMN is_guest INTEGER NOT NULL DEFAULT 0`);
   }
   // Every room needs an admin sign-off (side admins for family rooms, either side for the Loft).
   db.exec(`UPDATE rooms SET requires_approval = 1`);

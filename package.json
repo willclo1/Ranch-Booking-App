@@ -6,6 +6,7 @@
   "description": "AV Ranch (La Grange) family booking PWA",
   "scripts": {
     "setup": "node scripts/setup-db.mjs",
+    "reset-db": "node scripts/reset-db.mjs",
     "dev": "concurrently -n api,web -c blue,green \"node --watch server/index.js\" \"vite\"",
     "build": "vite build",
     "start": "node server/index.js",

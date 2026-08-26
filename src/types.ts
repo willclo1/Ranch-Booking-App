@@ -10,6 +10,8 @@ export interface User {
   role: Role;
   hasPin?: boolean;
   phone?: string | null;
+  /** A bookable name with no sign-in (kids, friends) — hidden from the login screen. */
+  isGuest?: boolean;
 }
 
 export interface Room {

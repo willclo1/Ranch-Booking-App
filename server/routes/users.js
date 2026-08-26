@@ -9,14 +9,24 @@ export const users = Router();
 users.get('/', requireUser, (_req, res) => {
   const db = getDb();
   const rows = db
-    .prepare(`SELECT id, name, family, role, phone, pin_hash IS NOT NULL AS hasPin, created_at FROM users WHERE role != 'sysadmin' ORDER BY name COLLATE NOCASE`)
+    .prepare(
+      `SELECT id, name, family, role, phone, is_guest, pin_hash IS NOT NULL AS hasPin, created_at FROM users
+       WHERE role != 'sysadmin' ORDER BY is_guest, name COLLATE NOCASE`
+    )
     .all();
   res.json({
-    users: rows.map((r) => ({ id: r.id, name: r.name, family: r.family, role: r.role, phone: r.phone, hasPin: !!r.hasPin, createdAt: r.created_at })),
+    users: rows.map((r) => ({
+      id: r.id, name: r.name, family: r.family, role: r.role, phone: r.phone,
+      isGuest: !!r.is_guest, hasPin: !!r.hasPin, createdAt: r.created_at,
+    })),
   });
 });
 
-/** "Add a name" from the booking dropdown — any signed-in user can add a guest. */
+/**
+ * Add a name. Defaults to a GUEST — a bookable name with no sign-in, hidden from
+ * the login screen (kids, friends, in-laws). Admins can pass isGuest:false to add
+ * a full family member who signs in with their own code.
+ */
 users.post('/', requireUser, (req, res) => {
   const name = String(req.body?.name || '').trim().slice(0, 40);
   if (name.length < 2) return res.status(400).json({ error: 'Name is too short' });
@@ -24,9 +34,13 @@ users.post('/', requireUser, (req, res) => {
   const db = getDb();
   const existing = db.prepare('SELECT id, name FROM users WHERE name = ? COLLATE NOCASE').get(name);
   if (existing) return res.status(409).json({ error: `${existing.name} is already on the list` });
-  const info = db.prepare(`INSERT INTO users (name, role) VALUES (?, 'user')`).run(name);
-  const row = db.prepare('SELECT id, name, family, role FROM users WHERE id = ?').get(Number(info.lastInsertRowid));
-  res.status(201).json({ user: { ...row, hasPin: false } });
+
+  const isAdmin = req.user.role === 'admin' || req.user.role === 'sysadmin';
+  const isGuest = req.body?.isGuest === false && isAdmin ? 0 : 1;
+
+  const info = db.prepare(`INSERT INTO users (name, role, is_guest) VALUES (?, 'user', ?)`).run(name, isGuest);
+  const row = db.prepare('SELECT id, name, family, role, is_guest FROM users WHERE id = ?').get(Number(info.lastInsertRowid));
+  res.status(201).json({ user: { id: row.id, name: row.name, family: row.family, role: row.role, isGuest: !!row.is_guest, hasPin: false } });
 });
 
 /**
@@ -69,6 +83,16 @@ users.patch('/:id', requireUser, (req, res) => {
     const role = body.role === 'admin' ? 'admin' : 'user';
     db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, id);
   }
+  if ('isGuest' in body) {
+    // Upgrade a guest to a family member (they set a code on first sign-in), or
+    // demote a member back to a bookable-only guest.
+    const guest = body.isGuest ? 1 : 0;
+    db.prepare('UPDATE users SET is_guest = ? WHERE id = ?').run(guest, id);
+    if (guest) {
+      db.prepare('UPDATE users SET pin_hash = NULL WHERE id = ?').run(id);
+      db.prepare('DELETE FROM sessions WHERE user_id = ?').run(id);
+    }
+  }
   if (body.resetPin) {
     db.prepare('UPDATE users SET pin_hash = NULL WHERE id = ?').run(id);
     db.prepare('DELETE FROM sessions WHERE user_id = ?').run(id);
@@ -81,8 +105,10 @@ users.patch('/:id', requireUser, (req, res) => {
       db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, id);
     }
   }
-  const row = db.prepare('SELECT id, name, family, role, phone, pin_hash IS NOT NULL AS hasPin FROM users WHERE id = ?').get(id);
-  res.json({ user: { id: row.id, name: row.name, family: row.family, role: row.role, phone: row.phone, hasPin: !!row.hasPin } });
+  const row = db.prepare('SELECT id, name, family, role, phone, is_guest, pin_hash IS NOT NULL AS hasPin FROM users WHERE id = ?').get(id);
+  res.json({
+    user: { id: row.id, name: row.name, family: row.family, role: row.role, phone: row.phone, isGuest: !!row.is_guest, hasPin: !!row.hasPin },
+  });
 });
 
 /** Delete a user who has never been part of a booking (admin cleanup of typos). */
