@@ -110,4 +110,27 @@ localhost) for full PWA features. On a plain home network you have two easy opti
 | `npm run icons` | Regenerate PWA icons from `assets/logo-original.png` |
 | `RANCH_DB=/path/to.db npm start` | Use a database file somewhere else |
 
+## Running it on a server
+
+Two scripts handle the deployed copy. Both run **on the server**, not on your laptop.
+
+| Command | What it does |
+|---|---|
+| `./scripts/update.sh` | Pull, rebuild if anything changed, restart, verify. No-op when already current. |
+| `./scripts/update.sh --check` | Report what an update *would* do, change nothing |
+| `./scripts/update.sh --force` | Rebuild and restart even with no new commits |
+| `./scripts/health-check.sh` | Print a JSON health snapshot; exits non-zero if anything is wrong |
+| `./scripts/health-check.sh -o FILE` | Write that snapshot atomically to a file |
+
+`update.sh` backs up the database before it changes anything, and if the app fails
+to answer on `:4848` after restarting, it rolls back to the previous commit and
+restarts again rather than leaving you with a broken site.
+
+`health-check.sh` reports service states, HTTP and API status, both disks, drive
+SMART attributes, database integrity, backup freshness, TLS expiry, and CPU
+temperature — with a top-level `status` of `ok` or `degraded` and a `problems`
+array naming anything that failed. Paths are overridable by environment variable
+(`RANCH_APP_DIR`, `RANCH_DB`, `RANCH_BACKUP_DIR`, `RANCH_DISK_DEV`, and friends)
+so it is not hardcoded to one machine.
+
 The database is a single file: `data/ranch.db`. **Back it up** by copying that file.
