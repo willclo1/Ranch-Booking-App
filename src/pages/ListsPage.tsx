@@ -57,6 +57,10 @@ export function ListsPage() {
 function TemplateEditor({ type, title }: { type: 'checkin' | 'checkout'; title: string }) {
   const qc = useQueryClient();
   const toast = useToast();
+  const { user } = useAuth();
+  // Check-in / check-out steps are the same for every stay, so admins own them.
+  // Everyone else reads them here and ticks them off on their own booking.
+  const admin = isAdminish(user);
   const [text, setText] = useState('');
 
   const { data } = useQuery({
@@ -113,43 +117,55 @@ function TemplateEditor({ type, title }: { type: 'checkin' | 'checkout'; title: 
         {items.map((item, idx) => (
           <div key={item.id} className="list-item" style={{ alignItems: 'center' }}>
             <div className="list-text">{item.text}</div>
-            <button className="icon-btn" aria-label="Move up" disabled={idx === 0} onClick={() => swap(idx, -1)}>
-              ↑
-            </button>
-            <button className="icon-btn" aria-label="Move down" disabled={idx === items.length - 1} onClick={() => swap(idx, 1)}>
-              ↓
-            </button>
-            <button
-              className="icon-btn"
-              aria-label="Edit"
-              onClick={() => {
-                const next = window.prompt('Edit item', item.text);
-                if (next && next.trim()) rename.mutate({ id: item.id, text: next.trim() });
-              }}
-            >
-              ✎
-            </button>
-            <button
-              className="icon-btn"
-              aria-label="Delete"
-              onClick={() => window.confirm(`Delete "${item.text}"?`) && remove.mutate(item.id)}
-            >
-              ✕
-            </button>
+            {admin && (
+              <>
+                <button className="icon-btn" aria-label="Move up" disabled={idx === 0} onClick={() => swap(idx, -1)}>
+                  ↑
+                </button>
+                <button className="icon-btn" aria-label="Move down" disabled={idx === items.length - 1} onClick={() => swap(idx, 1)}>
+                  ↓
+                </button>
+                <button
+                  className="icon-btn"
+                  aria-label="Edit"
+                  onClick={() => {
+                    const next = window.prompt('Edit item', item.text);
+                    if (next && next.trim()) rename.mutate({ id: item.id, text: next.trim() });
+                  }}
+                >
+                  ✎
+                </button>
+                <button
+                  className="icon-btn"
+                  aria-label="Delete"
+                  onClick={() => window.confirm(`Delete "${item.text}"?`) && remove.mutate(item.id)}
+                >
+                  ✕
+                </button>
+              </>
+            )}
           </div>
         ))}
-        <div className="add-row">
-          <input
-            className="input"
-            value={text}
-            placeholder={`Add a ${title.toLowerCase()} step…`}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && text.trim() && add.mutate()}
-          />
-          <button className="btn btn-primary" disabled={!text.trim() || add.isPending} onClick={() => add.mutate()}>
-            Add
-          </button>
-        </div>
+        {admin ? (
+          <div className="add-row">
+            <input
+              className="input"
+              value={text}
+              placeholder={`Add a ${title.toLowerCase()} step…`}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && text.trim() && add.mutate()}
+            />
+            <button className="btn btn-primary" disabled={!text.trim() || add.isPending} onClick={() => add.mutate()}>
+              Add
+            </button>
+          </div>
+        ) : (
+          <p className="muted small" style={{ margin: 0 }}>
+            {items.length === 0
+              ? 'The admins haven’t set up this list yet.'
+              : 'The admins keep this list the same for every stay. You tick these off on your own booking.'}
+          </p>
+        )}
       </div>
     </details>
   );

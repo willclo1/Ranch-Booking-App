@@ -47,6 +47,9 @@ Tests: `npm test` (runs the API rule suite against a throwaway database).
 - **Book from the calendar** — tap your arrival day, then your departure day; the range
   highlights and a bar appears that jumps straight into the booking form with those dates.
 - **Editing** a booking clears its approvals and sends it back through the flow.
+- **Check-in / check-out lists** are standard across every stay, so **only admins** add,
+  reword, reorder or remove steps. Everyone can see them and tick them off on their own
+  booking. The grocery and to-do lists stay open to the whole family.
 - **Family members** sign in by picking their name from a dropdown and typing a **4-digit
   code** (created on first visit). Newcomers can add themselves from the sign-in screen
   ("I'm new here"); admins can add people or reset a code from Account → People.

@@ -329,16 +329,33 @@ check('admin can delete others items', r.status === 200);
 
 // --- Checklists ---
 console.log('\n--- checklists ---');
-r = await will.post('/api/checklists/templates', { type: 'checkout', text: 'Take trash to the bin' });
+// The check-in / check-out lists are standard across every stay, so only admins
+// maintain them. Everyone else reads them and ticks them off on their booking.
+r = await jimmy.post('/api/checklists/templates', { type: 'checkout', text: 'Take trash to the bin' });
 const ckTpl = r.data.id;
-check('template item added', r.status === 201);
+check('admin adds a template item', r.status === 201, JSON.stringify(r.data));
+
+r = await will.post('/api/checklists/templates', { type: 'checkout', text: 'Regular user step' });
+check('regular user cannot add a template item', r.status === 403, JSON.stringify(r.data));
+r = await will.patch(`/api/checklists/templates/${ckTpl}`, { text: 'Renamed by a regular user' });
+check('regular user cannot reword a template item', r.status === 403);
+r = await will.req('DELETE', `/api/checklists/templates/${ckTpl}`);
+check('regular user cannot delete a template item', r.status === 403);
+
+r = await will.get('/api/checklists/templates');
+check('regular user can still read the lists', r.status === 200 && r.data.checkout.some((i) => i.id === ckTpl));
+check('template survived the regular user', r.data.checkout.find((i) => i.id === ckTpl).text === 'Take trash to the bin');
+
 r = await will.post(`/api/checklists/booking/${bFull.id}/toggle`, { templateItemId: ckTpl });
-check('check recorded', r.data.checked === true);
+check('regular user can tick an item off', r.data.checked === true);
 r = await will.get(`/api/checklists/booking/${bFull.id}`);
 const ckItem = r.data.checkout.find((i) => i.id === ckTpl);
 check('check shows who/when', ckItem.checked_by === 'Will' && !!ckItem.checked_at);
-r = await will.req('DELETE', `/api/checklists/templates/${ckTpl}`);
-check('template item deleted', r.status === 200);
+
+r = await jimmy.patch(`/api/checklists/templates/${ckTpl}`, { text: 'Take trash to the bins' });
+check('admin can reword a template item', r.status === 200);
+r = await jimmy.req('DELETE', `/api/checklists/templates/${ckTpl}`);
+check('admin deletes a template item', r.status === 200);
 
 // --- Users ---
 console.log('\n--- users ---');

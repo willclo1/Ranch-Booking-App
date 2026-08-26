@@ -1,10 +1,14 @@
 import { Router } from 'express';
 import { getDb } from '../db.js';
-import { requireUser } from '../auth.js';
+import { requireUser, requireAdmin } from '../auth.js';
 
 /**
- * Check-in / check-out checklist templates (open CRUD — the family maintains them),
- * plus per-booking completion runs recording who checked what and when.
+ * Check-in / check-out checklist templates, plus per-booking completion runs
+ * recording who checked what and when.
+ *
+ * The templates are standard across every booking, so only admins may add,
+ * reword, reorder or remove items. Everyone can read them and tick them off on
+ * their own stay.
  */
 export const checklists = Router();
 
@@ -19,7 +23,7 @@ checklists.get('/templates', requireUser, (_req, res) => {
   });
 });
 
-checklists.post('/templates', requireUser, (req, res) => {
+checklists.post('/templates', requireAdmin, (req, res) => {
   const { type } = req.body || {};
   const text = String(req.body?.text || '').trim().slice(0, 200);
   if (!TYPES.has(type)) return res.status(400).json({ error: 'Invalid checklist type' });
@@ -32,7 +36,7 @@ checklists.post('/templates', requireUser, (req, res) => {
   res.status(201).json({ id: Number(info.lastInsertRowid) });
 });
 
-checklists.patch('/templates/:id', requireUser, (req, res) => {
+checklists.patch('/templates/:id', requireAdmin, (req, res) => {
   const db = getDb();
   const id = Number(req.params.id);
   const item = db.prepare('SELECT * FROM checklist_templates WHERE id = ?').get(id);
@@ -47,7 +51,7 @@ checklists.patch('/templates/:id', requireUser, (req, res) => {
   res.json({ ok: true });
 });
 
-checklists.delete('/templates/:id', requireUser, (req, res) => {
+checklists.delete('/templates/:id', requireAdmin, (req, res) => {
   const db = getDb();
   const info = db.prepare('DELETE FROM checklist_templates WHERE id = ?').run(Number(req.params.id));
   if (info.changes === 0) return res.status(404).json({ error: 'Item not found' });
