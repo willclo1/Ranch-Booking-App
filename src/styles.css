@@ -442,14 +442,22 @@ label.field > * {
   align-items: flex-end;
   justify-content: center;
   /* --kb-inset is the height the on-screen keyboard covers, measured from the
-     visual viewport in Sheet.tsx. Padding the overlay lifts the sheet clear. */
-  padding-bottom: var(--kb-inset, 0px);
-  transition: padding-bottom 0.15s ease-out;
+     visual viewport in Sheet.tsx and updated every frame while it slides.
+     Lifting the whole overlay with a transform keeps this on the compositor —
+     padding or height here would reflow the sheet and its list on every frame,
+     which is what made the movement stutter. The strip of backdrop this
+     uncovers at the bottom sits behind the keyboard, so it is never seen.
+     Deliberately not transitioned: the per-frame updates are the animation. */
+  transform: translate3d(0, calc(var(--kb-inset, 0px) * -1), 0);
+  will-change: transform;
 }
 .sheet {
   width: 100%;
   max-width: 640px;
-  max-height: calc(86dvh - var(--kb-inset, 0px));
+  /* The overlay is lifted by --kb-inset, so the room left above the keyboard is
+     100dvh minus that. Cap to it (less a small margin) so the sheet can never
+     run off the top, while still using the full space the keyboard leaves. */
+  max-height: min(86dvh, calc(100dvh - var(--kb-inset, 0px) - 24px));
   background: var(--bg);
   border-radius: 20px 20px 0 0;
   padding: 8px 16px calc(20px + env(safe-area-inset-bottom, 0px));
@@ -1024,9 +1032,10 @@ label.field > * {
   background: var(--bg);
 }
 .person-list {
-  /* Give the list back to the keyboard when it is up, so the sheet does not
-     have to scroll to keep the search field and the first results together. */
-  max-height: max(24dvh, calc(40dvh - var(--kb-inset, 0px)));
+  /* Fixed on purpose. Keying this to --kb-inset meant the list re-laid out on
+     every frame of the keyboard animation, fighting the sheet's own movement.
+     The sheet body scrolls, so a static cap is enough. */
+  max-height: 34dvh;
   overflow-y: auto;
   overscroll-behavior: contain;
   border: 1px solid var(--line);
