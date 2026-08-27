@@ -147,8 +147,10 @@ export function CalendarPage() {
     for (let i = 0; i < cells.length; i += 7) w.push(cells.slice(i, i + 7));
     return w;
   }, [cells]);
-  const from = cells[0].iso;
-  const to = cells[cells.length - 1].iso;
+  // Widened one day each way so an arrival on the last visible day (or a
+  // checkout on the first) still gets its half-day stub rendered.
+  const from = addDaysISO(cells[0].iso, -1);
+  const to = addDaysISO(cells[cells.length - 1].iso, 1);
 
   const { data, isLoading } = useQuery({
     queryKey: ['bookings', from, to],
