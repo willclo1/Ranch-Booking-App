@@ -139,4 +139,8 @@ array naming anything that failed. Paths are overridable by environment variable
 (`RANCH_APP_DIR`, `RANCH_DB`, `RANCH_BACKUP_DIR`, `RANCH_DISK_DEV`, and friends)
 so it is not hardcoded to one machine.
 
+**[LOGGING.md](LOGGING.md)** is the reference for reading logs on the server —
+where each one lives, and the commands for the app, the web server, request
+logs, backups, health, DNS, disk and deploys.
+
 The database is a single file: `data/ranch.db`. **Back it up** by copying that file.
