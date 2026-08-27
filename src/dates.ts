@@ -73,3 +73,16 @@ export function monthGrid(anchor: Date): MonthCell[] {
 export function dayInStay(dayISO: string, startISO: string, endISO: string): boolean {
   return startISO <= dayISO && dayISO < endISO;
 }
+
+/** The 7 days (Sun-Sat) of the week containing `anchor`. */
+export function weekGrid(anchor: Date): MonthCell[] {
+  const start = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() - anchor.getDay());
+  const today = todayISO();
+  const cells: MonthCell[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+    const iso = toISO(d);
+    cells.push({ iso, day: d.getDate(), inMonth: true, isToday: iso === today });
+  }
+  return cells;
+}

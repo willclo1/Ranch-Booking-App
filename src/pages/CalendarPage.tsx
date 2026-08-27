@@ -2,58 +2,130 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
-import { addDaysISO, dayInStay, fmtLong, fmtRange, fmtShort, monthGrid, parseISO, todayISO, type MonthCell } from '../dates';
+import {
+  addDaysISO, dayInStay, fmtLong, fmtRange, fmtShort, monthGrid, parseISO, todayISO, weekGrid, type MonthCell,
+} from '../dates';
 import { Sheet } from '../components/Sheet';
 import { Spinner, StatusChip } from '../components/bits';
 import type { Booking, HolidayWindow } from '../types';
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MAX_LANES = 3;
+const SIDE_WORD: Record<string, string> = { clore: 'Clore', gabriel: 'Gabriel', shared: 'Loft' };
 
-/** Greedy lane assignment so overlapping stays stack like a modern calendar app. */
-function assignLanes(bookings: Booking[]): Map<number, number> {
-  const sorted = [...bookings].sort(
+type EventCategory = 'clore' | 'gabriel' | 'shared' | 'mixed' | 'full';
+
+/**
+ * A bar on the calendar. Usually one booking — but overlapping bookings of the
+ * same side (and same status) merge into a single bar ("3 Clore rooms") so a
+ * busy weekend reads as one reserved block. Tapping a merged bar lists its bookings.
+ */
+interface CalEvent {
+  key: string;
+  bookings: Booking[];
+  startDate: string;
+  endDate: string; // exclusive checkout day (rendered as a half day)
+  category: EventCategory;
+  pending: boolean;
+}
+
+function categoryOf(b: Booking): EventCategory {
+  if (b.isFullRanch) return 'full';
+  const sides = new Set(b.rooms.map((r) => r.side));
+  return sides.size === 1 ? ([...sides][0] as EventCategory) : 'mixed';
+}
+
+function buildEvents(bookings: Booking[]): CalEvent[] {
+  // Bucket by mergeable group; whole-ranch and mixed-side stays never merge.
+  const groups = new Map<string, Booking[]>();
+  for (const b of bookings) {
+    const cat = categoryOf(b);
+    const gkey =
+      cat === 'full' || cat === 'mixed' ? `solo-${b.id}` : `${cat}-${b.status === 'pending' ? 'pending' : 'ok'}`;
+    groups.set(gkey, [...(groups.get(gkey) ?? []), b]);
+  }
+
+  const events: CalEvent[] = [];
+  for (const members of groups.values()) {
+    const sorted = [...members].sort((a, b) => a.startDate.localeCompare(b.startDate));
+    let cluster: Booking[] = [];
+    let clusterEnd = '';
+    const flush = () => {
+      if (cluster.length === 0) return;
+      events.push({
+        key: cluster.map((x) => x.id).join('-'),
+        bookings: cluster,
+        startDate: cluster[0].startDate,
+        endDate: clusterEnd,
+        category: categoryOf(cluster[0]),
+        pending: cluster[0].status === 'pending',
+      });
+    };
+    for (const b of sorted) {
+      // Strictly overlapping nights merge; back-to-back turnovers stay separate bars.
+      if (cluster.length > 0 && b.startDate < clusterEnd) {
+        cluster.push(b);
+        if (b.endDate > clusterEnd) clusterEnd = b.endDate;
+      } else {
+        flush();
+        cluster = [b];
+        clusterEnd = b.endDate;
+      }
+    }
+    flush();
+  }
+  return events;
+}
+
+/** Greedy lane assignment so overlapping bars stack like a modern calendar app. */
+function assignLanes(events: CalEvent[]): Map<string, number> {
+  const sorted = [...events].sort(
     (a, b) => a.startDate.localeCompare(b.startDate) || b.endDate.localeCompare(a.endDate)
   );
   const laneEnds: string[] = [];
-  const lanes = new Map<number, number>();
-  for (const b of sorted) {
-    let lane = laneEnds.findIndex((end) => end <= b.startDate);
+  const lanes = new Map<string, number>();
+  for (const e of sorted) {
+    let lane = laneEnds.findIndex((end) => end <= e.startDate);
     if (lane === -1) {
       lane = laneEnds.length;
-      laneEnds.push(b.endDate);
+      laneEnds.push(e.endDate);
     } else {
-      laneEnds[lane] = b.endDate;
+      laneEnds[lane] = e.endDate;
     }
-    lanes.set(b.id, lane);
+    lanes.set(e.key, lane);
   }
   return lanes;
 }
 
-function barClass(b: Booking): string {
-  let color: string;
-  if (b.isFullRanch) color = 'bar-full';
-  else {
-    const sides = new Set(b.rooms.map((r) => r.side));
-    color = sides.size === 1 ? `bar-${[...sides][0]}` : 'bar-mixed';
-  }
-  return `cal-bar ${color} ${b.status === 'pending' ? 'bar-pending' : ''}`;
+function eventClass(e: CalEvent): string {
+  const color = e.category === 'full' ? 'bar-full' : e.category === 'mixed' ? 'bar-mixed' : `bar-${e.category}`;
+  return `cal-bar ${color} ${e.pending ? 'bar-pending' : ''}`;
 }
 
-function barLabel(b: Booking): string {
+function bookingLabel(b: Booking): string {
   if (b.isFullRanch) return `Whole Ranch · ${b.createdByName}`;
   const names = [...new Set(b.guests.map((g) => g.name))];
   return names.length > 0 ? names.join(', ') : b.createdByName;
 }
 
+function eventLabel(e: CalEvent): string {
+  if (e.bookings.length === 1) return bookingLabel(e.bookings[0]);
+  const roomCount = new Set(e.bookings.flatMap((b) => b.rooms.map((r) => r.id))).size;
+  return `${roomCount} ${SIDE_WORD[e.category] ?? ''} rooms`;
+}
+
+function eventNames(e: CalEvent): string {
+  return [...new Set(e.bookings.flatMap((b) => b.guests.map((g) => g.name)))].join(', ');
+}
+
 export function CalendarPage() {
-  const [anchor, setAnchor] = useState(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
-  });
+  const [view, setView] = useState<'month' | 'week'>('month');
+  const [anchor, setAnchor] = useState(() => new Date());
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [groupOpen, setGroupOpen] = useState<CalEvent | null>(null);
   const [sel, setSel] = useState<{ start: string; end: string } | null>(null);
   const navigate = useNavigate();
+
+  const maxLanes = view === 'week' ? 6 : 3;
 
   // Tap once to pick your arrival day, tap again to pick departure.
   // Tapping the same day clears; tapping with a full range starts over.
@@ -69,7 +141,7 @@ export function CalendarPage() {
     }
   };
 
-  const cells = useMemo(() => monthGrid(anchor), [anchor]);
+  const cells = useMemo(() => (view === 'month' ? monthGrid(anchor) : weekGrid(anchor)), [view, anchor]);
   const weeks = useMemo(() => {
     const w: MonthCell[][] = [];
     for (let i = 0; i < cells.length; i += 7) w.push(cells.slice(i, i + 7));
@@ -94,7 +166,8 @@ export function CalendarPage() {
     () => (data?.bookings ?? []).filter((b) => b.status === 'pending' || b.status === 'approved'),
     [data]
   );
-  const lanes = useMemo(() => assignLanes(active), [active]);
+  const events = useMemo(() => buildEvents(active), [active]);
+  const lanes = useMemo(() => assignLanes(events), [events]);
 
   const holidayFor = (iso: string) => holidayData?.windows.find((w) => w.start <= iso && iso <= w.end)?.name ?? null;
   const bookingsOn = (iso: string) => active.filter((b) => dayInStay(iso, b.startDate, b.endDate));
@@ -102,35 +175,35 @@ export function CalendarPage() {
   const dayDiff = (a: string, b: string) => Math.round((parseISO(b).getTime() - parseISO(a).getTime()) / 86400000);
 
   interface Seg {
-    booking: Booking;
+    event: CalEvent;
     col: number;
     span: number;
     lane: number;
-    roundL: boolean;
-    roundR: boolean;
+    startsHere: boolean; // arrival day in this segment — bar begins mid-cell
+    endsHere: boolean; // departure day in this segment — bar ends mid-cell
   }
   const segmentsFor = (week: MonthCell[]): { segs: Seg[]; more: { col: number; span: number; count: number } | null } => {
     const w0 = week[0].iso;
     const w6 = week[6].iso;
     const segs: Seg[] = [];
     const hidden: { from: string; to: string }[] = [];
-    for (const b of active) {
-      const lastNight = addDaysISO(b.endDate, -1);
-      if (b.startDate > w6 || lastNight < w0) continue;
-      const segFrom = b.startDate > w0 ? b.startDate : w0;
-      const segTo = lastNight < w6 ? lastNight : w6;
-      const lane = lanes.get(b.id) ?? 0;
-      if (lane >= MAX_LANES) {
+    for (const e of events) {
+      // Bars now run through the departure day (drawn as a half cell, hotel-style).
+      if (e.startDate > w6 || e.endDate < w0) continue;
+      const segFrom = e.startDate > w0 ? e.startDate : w0;
+      const segTo = e.endDate < w6 ? e.endDate : w6;
+      const lane = lanes.get(e.key) ?? 0;
+      if (lane >= maxLanes) {
         hidden.push({ from: segFrom, to: segTo });
         continue;
       }
       segs.push({
-        booking: b,
+        event: e,
         col: dayDiff(w0, segFrom),
         span: dayDiff(segFrom, segTo) + 1,
         lane,
-        roundL: segFrom === b.startDate,
-        roundR: segTo === lastNight,
+        startsHere: segFrom === e.startDate,
+        endsHere: segTo === e.endDate,
       });
     }
     let more: { col: number; span: number; count: number } | null = null;
@@ -142,26 +215,46 @@ export function CalendarPage() {
     return { segs, more };
   };
 
-  const monthLabel = anchor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const headLabel =
+    view === 'month'
+      ? anchor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+      : `${fmtRange(cells[0].iso, cells[6].iso)}, ${parseISO(cells[0].iso).getFullYear()}`;
+
+  const step = (dir: -1 | 1) =>
+    setAnchor(
+      view === 'month'
+        ? new Date(anchor.getFullYear(), anchor.getMonth() + dir, 1)
+        : new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() + dir * 7)
+    );
+
   const upcoming = active.filter((b) => b.endDate >= todayISO()).sort((a, b) => a.startDate.localeCompare(b.startDate));
 
   return (
     <div>
       <div className="cal-head">
-        <button
-          className="cal-nav-btn"
-          aria-label="Previous month"
-          onClick={() => setAnchor(new Date(anchor.getFullYear(), anchor.getMonth() - 1, 1))}
-        >
+        <button className="cal-nav-btn" aria-label={view === 'month' ? 'Previous month' : 'Previous week'} onClick={() => step(-1)}>
           ‹
         </button>
-        <h2 className="cal-month">{monthLabel}</h2>
-        <button
-          className="cal-nav-btn"
-          aria-label="Next month"
-          onClick={() => setAnchor(new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1))}
-        >
+        <h2 className="cal-month">{headLabel}</h2>
+        <button className="cal-nav-btn" aria-label={view === 'month' ? 'Next month' : 'Next week'} onClick={() => step(1)}>
           ›
+        </button>
+      </div>
+
+      <div className="tabs cal-view-toggle">
+        <button className={`tab ${view === 'month' ? 'active' : ''}`} onClick={() => setView('month')}>
+          Month
+        </button>
+        <button
+          className={`tab ${view === 'week' ? 'active' : ''}`}
+          onClick={() => {
+            // Jump the week view to today's week when coming from another month.
+            setView('week');
+            const now = new Date();
+            if (anchor.getMonth() !== now.getMonth() || anchor.getFullYear() !== now.getFullYear()) setAnchor(now);
+          }}
+        >
+          Week
         </button>
       </div>
 
@@ -173,7 +266,7 @@ export function CalendarPage() {
         ))}
       </div>
 
-      <div className="cal-weeks">
+      <div className={`cal-weeks ${view === 'week' ? 'week-view' : ''}`}>
         {weeks.map((week, wi) => {
           const { segs, more } = segmentsFor(week);
           return (
@@ -205,19 +298,30 @@ export function CalendarPage() {
               <div className="cal-week-events">
                 {segs.map((s) => (
                   <div
-                    key={`${s.booking.id}-${s.col}`}
-                    className={`${barClass(s.booking)} ${s.roundL ? 'round-l' : ''} ${s.roundR ? 'round-r' : ''}`}
-                    style={{ gridColumn: `${s.col + 1} / span ${s.span}`, gridRow: s.lane + 1 }}
-                    onClick={() => navigate(`/booking/${s.booking.id}`)}
-                    title={barLabel(s.booking)}
+                    key={`${s.event.key}-${s.col}`}
+                    className={`${eventClass(s.event)} ${s.startsHere ? 'round-l' : ''} ${s.endsHere ? 'round-r' : ''}`}
+                    style={{
+                      gridColumn: `${s.col + 1} / span ${s.span}`,
+                      gridRow: s.lane + 1,
+                      // Arrival and departure are half days, like a hotel calendar —
+                      // a checkout and a new arrival share the turnover day.
+                      marginLeft: s.startsHere ? `${50 / s.span}%` : undefined,
+                      marginRight: s.endsHere ? `${50 / s.span}%` : undefined,
+                    }}
+                    onClick={() =>
+                      s.event.bookings.length === 1
+                        ? navigate(`/booking/${s.event.bookings[0].id}`)
+                        : setGroupOpen(s.event)
+                    }
+                    title={eventNames(s.event)}
                   >
-                    {barLabel(s.booking)}
+                    {eventLabel(s.event)}
                   </div>
                 ))}
                 {more && (
                   <div
                     className="cal-bar bar-more round-l round-r"
-                    style={{ gridColumn: `${more.col + 1} / span ${more.span}`, gridRow: MAX_LANES + 1 }}
+                    style={{ gridColumn: `${more.col + 1} / span ${more.span}`, gridRow: maxLanes + 1 }}
                     onClick={() => setSelectedDay(week[more.col].iso)}
                   >
                     +{more.count} more
@@ -253,7 +357,8 @@ export function CalendarPage() {
 
       {!sel && (
         <p className="muted small" style={{ margin: '8px 4px 0' }}>
-          Tip: tap your arrival day, then your departure day, to book straight from the calendar.
+          Tip: tap your arrival day, then your departure day, to book straight from the calendar. Bars end mid-day on
+          the departure day.
         </p>
       )}
 
@@ -269,6 +374,27 @@ export function CalendarPage() {
       {sel && <div style={{ height: 84 }} />}
 
       {sel && <SelectBar sel={sel} bookingsOn={bookingsOn} onClear={() => setSel(null)} onDetails={() => setSelectedDay(sel.start)} />}
+
+      <Sheet
+        open={!!groupOpen}
+        onClose={() => setGroupOpen(null)}
+        title={groupOpen ? `${eventLabel(groupOpen)} · ${fmtRange(groupOpen.startDate, groupOpen.endDate)}` : ''}
+      >
+        {groupOpen && (
+          <>
+            {groupOpen.bookings.map((b) => (
+              <BookingCard
+                key={b.id}
+                booking={b}
+                onClick={() => {
+                  setGroupOpen(null);
+                  navigate(`/booking/${b.id}`);
+                }}
+              />
+            ))}
+          </>
+        )}
+      </Sheet>
 
       <Sheet open={!!selectedDay} onClose={() => setSelectedDay(null)} title={selectedDay ? fmtLong(selectedDay) : ''}>
         {selectedDay && (

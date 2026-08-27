@@ -1350,3 +1350,16 @@ details.acc .acc-body {
     padding-right: 18px;
   }
 }
+
+/* ---------- calendar view toggle + week view ---------- */
+.cal-view-toggle {
+  margin-bottom: 8px;
+}
+.cal-view-toggle .tab {
+  min-height: 34px;
+  padding: 6px;
+}
+/* Week view: one tall row with room for more stacked stays */
+.cal-weeks.week-view .cal-day {
+  min-height: 190px;
+}

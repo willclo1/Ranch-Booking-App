@@ -206,7 +206,7 @@ export function BookPage() {
               </span>
             ))}
           </span>
-        ) : fullRanch ? (
+        ) : heldByFullRanch(room) ? (
           <span className="tile-state needs-guest">Needs a guest — tap to add</span>
         ) : (
           <span className="tile-state open">Open · tap to add guests</span>
