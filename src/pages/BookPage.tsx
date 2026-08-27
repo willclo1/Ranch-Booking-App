@@ -11,6 +11,12 @@ import type { Availability, Booking, Room, User } from '../types';
 /** roomId -> the user ids staying in that room */
 type GuestMap = Record<number, number[]>;
 
+/** Whose room it is, shown under the name on the tile. */
+const ROOM_OWNER: Record<string, string> = {
+  master1: "Jimmy & Lynn's room",
+  master2: "Kevin & Pamela's room",
+};
+
 export function BookPage() {
   const { id } = useParams();
   const editId = id ? Number(id) : null;
@@ -186,7 +192,7 @@ export function BookPage() {
           <span className={`side-dot side-${room.side}`} />
           {room.name}
         </span>
-        {room.key === 'master1' && <span className="room-sub">Jimmy &amp; Lynn's room</span>}
+        {ROOM_OWNER[room.key] && <span className="room-sub">{ROOM_OWNER[room.key]}</span>}
         {blocked ? (
           <span className="tile-state">
             Booked · {info!.by}
