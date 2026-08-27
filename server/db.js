@@ -158,6 +158,20 @@ function migrate(db) {
   }
   // Every room needs an admin sign-off (side admins for family rooms, either side for the Loft).
   db.exec(`UPDATE rooms SET requires_approval = 1`);
+
+  // The bedrooms were renamed after their teams. Keyed on the room key AND the
+  // old name, so this fires once on an existing database and then never again —
+  // a later rename won't be stomped back on the next restart.
+  const renames = [
+    ['guest4', 'Guest 4', 'UT'],
+    ['guest2', 'Guest 2', 'Baylor'],
+    ['guest3', 'Guest 3', 'TCU'],
+    ['guest1', 'Guest 1', 'Clemson'],
+    ['master2', 'Master 2', 'Gabriel Master'],
+    ['master1', 'Master 1', 'Clore Master'],
+  ];
+  const rename = db.prepare('UPDATE rooms SET name = ? WHERE key = ? AND name = ?');
+  for (const [key, was, now] of renames) rename.run(now, key, was);
 }
 
 function seed(db) {
@@ -182,12 +196,12 @@ function seed(db) {
   if (roomCount === 0) {
     const ins = db.prepare('INSERT INTO rooms (key, name, side, sort_order, requires_approval) VALUES (?, ?, ?, ?, ?)');
     // Layout mirrors the hand-drawn plan: Gabriel side = left column, Clore side = right column.
-    ins.run('guest4', 'Guest 4', 'gabriel', 1, 1);
-    ins.run('guest2', 'Guest 2', 'clore', 2, 1);
-    ins.run('guest3', 'Guest 3', 'gabriel', 3, 1);
-    ins.run('guest1', 'Guest 1', 'clore', 4, 1);
-    ins.run('master2', 'Master 2', 'gabriel', 5, 1);
-    ins.run('master1', 'Master 1', 'clore', 6, 1);
+    ins.run('guest4', 'UT', 'gabriel', 1, 1);
+    ins.run('guest2', 'Baylor', 'clore', 2, 1);
+    ins.run('guest3', 'TCU', 'gabriel', 3, 1);
+    ins.run('guest1', 'Clemson', 'clore', 4, 1);
+    ins.run('master2', 'Gabriel Master', 'gabriel', 5, 1);
+    ins.run('master1', 'Clore Master', 'clore', 6, 1);
     ins.run('loft', 'The Loft', 'shared', 7, 1);
   }
 }

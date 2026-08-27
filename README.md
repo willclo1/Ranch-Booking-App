@@ -25,7 +25,7 @@ Tests: `npm test` (runs the API rule suite against a throwaway database).
 
 | | |
 |---|---|
-| **Rooms** | Gabriel side: Guest 4, Guest 3, Master 2 · Clore side: Guest 2, Guest 1, Master 1 (Jimmy & Lynn's) · Shared: The Loft (barn) |
+| **Rooms** | Gabriel side: UT, TCU, Gabriel Master (Kevin & Pamela's) · Clore side: Baylor, Clemson, Clore Master (Jimmy & Lynn's) · Shared: The Loft (barn) |
 | **Admins** | Clore side: Jimmy & Lynn · Gabriel side: Kevin & Pamela |
 | **Seeded names** | Jimmy, Lynn, Kevin, Pamela, Will, Erin, Sara, Ben, Rion, Austin (+ add more from any guest dropdown) |
 
