@@ -13,6 +13,8 @@ type Segment = ListKind | 'checklists';
 export function ListsPage() {
   const [segment, setSegment] = useState<Segment>('grocery');
   const [showArchive, setShowArchive] = useState(false);
+  const { user } = useAuth();
+  const admin = isAdminish(user);
 
   return (
     <div className="stack">
@@ -31,8 +33,9 @@ export function ListsPage() {
       {segment === 'checklists' ? (
         <>
           <p className="muted small" style={{ margin: '0 2px' }}>
-            The master check-in / check-out lists everyone runs through each stay. Anyone can edit them; you tick the
-            boxes on your own booking.
+            The master check-in / check-out lists everyone runs through each stay. They are the same for every
+            booking, so {admin ? 'only admins — you included — can change them' : 'only admins can change them'}. You
+            tick the boxes on your own booking.
           </p>
           <TemplateEditor type="checkin" title="Check-in" />
           <TemplateEditor type="checkout" title="Check-out" />

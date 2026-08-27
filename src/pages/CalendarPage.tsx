@@ -85,7 +85,9 @@ export function CalendarPage() {
   const { data: holidayData } = useQuery({
     queryKey: ['holidays', anchor.getFullYear()],
     queryFn: () => api.get<{ windows: HolidayWindow[] }>(`/api/bookings/holidays?year=${anchor.getFullYear()}`),
+    // Fixed dates for the year — no reason to be in the polling rotation.
     staleTime: 3600_000,
+    refetchInterval: false,
   });
 
   const active = useMemo(

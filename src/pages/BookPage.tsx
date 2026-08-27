@@ -19,7 +19,13 @@ export function BookPage() {
   const toast = useToast();
   const qc = useQueryClient();
 
-  const { data: roomData } = useQuery({ queryKey: ['rooms'], queryFn: () => api.get<{ rooms: Room[] }>('/api/rooms') });
+  // The seven rooms don't change — keep them out of the polling rotation.
+  const { data: roomData } = useQuery({
+    queryKey: ['rooms'],
+    queryFn: () => api.get<{ rooms: Room[] }>('/api/rooms'),
+    staleTime: 3600_000,
+    refetchInterval: false,
+  });
   const { data: userData } = useQuery({ queryKey: ['users'], queryFn: () => api.get<{ users: User[] }>('/api/users') });
   const { data: editData } = useQuery({
     queryKey: ['booking', editId],

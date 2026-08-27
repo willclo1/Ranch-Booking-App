@@ -21,6 +21,10 @@ export function BookingDetailPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['booking', bookingId],
     queryFn: () => api.get<{ booking: Booking }>(`/api/bookings/${bookingId}`),
+    // This is the screen people sit on while waiting on an admin, so a pending
+    // booking checks in faster than the app-wide default. Once it is decided
+    // there is nothing left to watch for.
+    refetchInterval: (q) => (q.state.data?.booking.status === 'pending' ? 5_000 : false),
   });
   const { data: usersData } = useQuery({
     queryKey: ['users'],
@@ -234,7 +238,7 @@ function ChecklistAccordion({ bookingId, type, title }: { bookingId: number; typ
       </summary>
       <div className="acc-body">
         {items.length === 0 && (
-          <p className="muted small">No items yet — anyone can add them under Lists → Checklists.</p>
+          <p className="muted small">No items yet — an admin can add them under Lists → Checklists.</p>
         )}
         {items.map((item) => (
           <div key={item.id} className="list-item">

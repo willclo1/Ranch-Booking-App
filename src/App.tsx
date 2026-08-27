@@ -17,7 +17,27 @@ import type { Booking } from './types';
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { staleTime: 15_000, retry: 1, refetchOnWindowFocus: true },
+    queries: {
+      // Everything shared — bookings, approvals, lists, checklists — goes
+      // through react-query, so polling here keeps the whole app live without
+      // each page arranging its own refresh.
+      //
+      // Polling rather than a socket, on purpose. A push channel would have to
+      // survive Caddy's `encode` (which buffers text/event-stream), the service
+      // worker's NetworkFirst rule sitting in front of every /api/ request, and
+      // iOS suspending live connections the moment the PWA is backgrounded — so
+      // it would still need refetch-on-focus underneath it. This reaches the
+      // same place with nothing to reconnect.
+      refetchInterval: 15_000,
+      // refetchIntervalInBackground is left false (the default) so a phone in a
+      // pocket stops polling entirely and only catches up when it is reopened.
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
+      // Long enough to dedupe a burst of renders, short enough that coming back
+      // to the app refetches instead of showing yesterday's answer.
+      staleTime: 5_000,
+      retry: 1,
+    },
   },
 });
 

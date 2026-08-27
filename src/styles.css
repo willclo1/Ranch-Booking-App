@@ -4,7 +4,9 @@
   --card: #fffdf7;
   --card-2: #f9f4e9;
   --ink: #2b2016;
-  --muted: #8a7a63;
+  /* Darkened from #8a7a63, which sat at 3.67:1 on --bg and 4.09:1 on --card —
+     both under the 4.5:1 WCAG AA floor. This clears it at 5.2:1 and 5.8:1. */
+  --muted: #6f6250;
   --line: #e4d9c2;
   --accent: #7a4a21;
   --accent-ink: #fffdf7;
@@ -37,7 +39,9 @@
     --card: #261f17;
     --card-2: #2e261c;
     --ink: #f1e8d6;
-    --muted: #a2937c;
+    /* Passed AA already at 5.4:1, but thin at the size these greys are used at.
+       Lifted to 6.4:1 on --card so checked-off lines stay legible. */
+    --muted: #b0a189;
     --line: #3d3225;
     --accent: #c98b4b;
     --accent-ink: #1b1510;
@@ -1242,7 +1246,8 @@ label.field > * {
   color: var(--muted);
 }
 .item-meta {
-  font-size: 11.5px;
+  /* 11.5px was small enough that even AA-passing grey read as washed out. */
+  font-size: 12px;
   color: var(--muted);
   margin-top: 2px;
   line-height: 1.4;
