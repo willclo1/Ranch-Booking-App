@@ -280,7 +280,13 @@ r = await will.post('/api/bookings', {
 });
 const bHol = r.data.booking;
 check('thanksgiving flagged holiday', bHol.isHoliday === true && bHol.holidayName === 'Thanksgiving', JSON.stringify(bHol));
-check('holiday needs both sides even for clore-only room', bHol.needs.clore && bHol.needs.gabriel);
+// Holidays are surfaced in the UI but carry no extra approval weight: a
+// Clore-only room over Thanksgiving needs exactly one Clore admin, same as any
+// other week.
+check('holiday clore-only room needs clore', bHol.needs.clore === true);
+check('holiday does NOT drag in the other side', bHol.needs.gabriel === false, JSON.stringify(bHol.needs));
+r = await jimmy.post(`/api/bookings/${bHol.id}/decide`, { decision: 'approved' });
+check('one clore admin fully approves a holiday stay', r.data.booking.status === 'approved', JSON.stringify(r.data));
 
 // --- Edit resets approvals ---
 console.log('\n--- edit re-approval ---');

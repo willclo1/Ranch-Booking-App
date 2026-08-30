@@ -99,15 +99,15 @@ export function BookPage() {
   const allChosen = rooms.flatMap((r) => chosenIn(r.id));
   const blockedIds = new Set(Object.keys(avail?.blockedRooms ?? {}).map(Number));
 
-  // Family rooms need that side's admin, the Loft either side,
-  // holidays and whole-ranch bookings both sides.
+  // Family rooms need that side's admin, the Loft either side, whole-ranch
+  // bookings both sides. Holidays are flagged on the calendar but no longer
+  // change who signs off — mirrors computeNeeds() on the server.
   const admins = users.filter((u) => u.role === 'admin');
   const adminNames = (family: 'clore' | 'gabriel') =>
     admins.filter((a) => a.family === family).map((a) => a.name).join(' or ') || `${family} admin`;
   const sides = new Set(selectedRooms.map((r) => r.side));
-  const isHoliday = !!avail?.holiday;
-  const needsClore = fullRanch || sides.has('clore') || isHoliday;
-  const needsGabriel = fullRanch || sides.has('gabriel') || isHoliday;
+  const needsClore = fullRanch || sides.has('clore');
+  const needsGabriel = fullRanch || sides.has('gabriel');
   const needsEither = !needsClore && !needsGabriel && sides.has('shared');
 
   // The Loft is the barn and books on its own, so "the whole ranch" holds the
@@ -249,7 +249,7 @@ export function BookPage() {
       </div>
 
       {avail?.holiday && (
-        <div className="banner banner-holiday">★ {avail.holiday} — holiday stays need an admin from both families.</div>
+        <div className="banner banner-holiday">★ {avail.holiday} — these dates fall over a holiday.</div>
       )}
       {avail?.fullRanchBlocked && (
         <div className="banner banner-error">
