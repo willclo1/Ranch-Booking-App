@@ -288,6 +288,39 @@ check('holiday does NOT drag in the other side', bHol.needs.gabriel === false, J
 r = await jimmy.post(`/api/bookings/${bHol.id}/decide`, { decision: 'approved' });
 check('one clore admin fully approves a holiday stay', r.data.booking.status === 'approved', JSON.stringify(r.data));
 
+// The point of the rule change: a holiday stay must be indistinguishable from
+// the same rooms on an ordinary week, as far as approvals go. Book the exact
+// same room twice — once over Christmas, once on a plain week in March — and
+// require the two `needs` objects to be identical.
+console.log('\n--- holiday vs ordinary week: identical approvals ---');
+const mkBooking = async (start, end) => {
+  const res = await will.post('/api/bookings', {
+    startDate: start, endDate: end,
+    rooms: [{ roomId: rooms.guest2.id, guestIds: [5] }],
+  });
+  return res.data.booking;
+};
+const overXmas = await mkBooking(d('12-23'), d('12-26'));
+const overPlain = await mkBooking(d('03-10'), d('03-13'));
+
+check('christmas stay is flagged as a holiday', overXmas.isHoliday === true && overXmas.holidayName === 'Christmas');
+check('march stay is not a holiday', overPlain.isHoliday === false);
+check(
+  'same room, holiday vs ordinary week -> identical needs',
+  JSON.stringify(overXmas.needs) === JSON.stringify(overPlain.needs),
+  `holiday=${JSON.stringify(overXmas.needs)} ordinary=${JSON.stringify(overPlain.needs)}`
+);
+check('and both start pending, not auto-approved', overXmas.status === 'pending' && overPlain.status === 'pending');
+
+// Same admin, same single approval, same end state on both.
+const xmasDecided = (await jimmy.post(`/api/bookings/${overXmas.id}/decide`, { decision: 'approved' })).data.booking;
+const plainDecided = (await jimmy.post(`/api/bookings/${overPlain.id}/decide`, { decision: 'approved' })).data.booking;
+check(
+  'one clore admin closes out both identically',
+  xmasDecided.status === 'approved' && plainDecided.status === 'approved',
+  `holiday=${xmasDecided.status} ordinary=${plainDecided.status}`
+);
+
 // --- Edit resets approvals ---
 console.log('\n--- edit re-approval ---');
 r = await will.patch(`/api/bookings/${b1.id}`, {
