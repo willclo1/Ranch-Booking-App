@@ -184,5 +184,16 @@ else
   printf '%s\n' "$JSON"
 fi
 
+RECIPIENT="willclore@yahoo.com"
+
+EMAIL_CONTENT="To: $RECIPIENT
+Subject: Health Check
+
+$JSON"
+
+
+echo "$EMAIL_CONTENT" | msmtp -t "$RECIPIENT"
+
+
 [ "$STATUS" = "ok" ] || exit 1
 exit 0
