@@ -192,7 +192,7 @@ Subject: Health Check
 $JSON"
 
 
-echo "$EMAIL_CONTENT" | msmtp -t "$RECIPIENT"
+echo "$EMAIL_CONTENT" | msmtp -t
 
 
 [ "$STATUS" = "ok" ] || exit 1
