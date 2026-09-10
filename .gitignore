@@ -5,3 +5,7 @@ data/
 *.log
 .env
 .DS_Store
+
+# Claude Code config lives in ~/.claude, never in the repo
+.claude/
+CLAUDE.md
