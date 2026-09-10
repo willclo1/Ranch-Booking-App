@@ -25,7 +25,7 @@ Tests: `npm test` (runs the API rule suite against a throwaway database).
 
 | | |
 |---|---|
-| **Rooms** | Gabriel side: Guest 4, Guest 3, Master 2 · Clore side: Guest 2, Guest 1, Master 1 (Jimmy & Lynn's) · Shared: The Loft (barn) |
+| **Rooms** | Gabriel side: UT, TCU, Gabriel Master (Kevin & Pamela's) · Clore side: Baylor, Clemson, Clore Master (Jimmy & Lynn's) · Shared: The Loft (barn) |
 | **Admins** | Clore side: Jimmy & Lynn · Gabriel side: Kevin & Pamela |
 | **Seeded names** | Jimmy, Lynn, Kevin, Pamela, Will, Erin, Sara, Ben, Rion, Austin (+ add more from any guest dropdown) |
 
@@ -35,7 +35,9 @@ Tests: `npm test` (runs the API rule suite against a throwaway database).
   room needs one Gabriel admin (Kevin *or* Pamela); the Loft can be approved by an admin
   from either family. One rejection rejects the booking.
 - **Holidays** — stays touching New Year's, Easter, Memorial Day, July 4th, Labor Day,
-  Thanksgiving, or Christmas (incl. their weekends) need an admin from **both** families.
+  Thanksgiving, or Christmas (incl. their weekends) are **flagged** on the calendar and
+  on the booking, but approve exactly like any other stay — the holiday itself adds no
+  extra sign-off.
 - **Whole ranch** — the "Reserve the whole ranch" checkbox holds the **six house rooms**
   and needs one admin from each family. No other house room can be booked over it.
   **The Loft is a special case**: it's the barn, so it isn't included and stays bookable

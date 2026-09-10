@@ -300,10 +300,13 @@ function computeNeeds(parsed) {
   const approvalSides = new Set(
     parsed.roomIds.filter((id) => parsed.roomById.get(id).requires_approval).map((id) => parsed.roomById.get(id).side)
   );
+  // Still resolved and stored so the calendar and booking pages can flag the
+  // holiday — it just no longer changes who has to sign off. A holiday stay
+  // needs exactly the same approvals as the same rooms on any other week.
   const holidayName = holidayForRange(parsed.startDate, parsed.endDate);
   const isHoliday = !!holidayName;
-  const needsClore = parsed.isFullRanch || approvalSides.has('clore') || isHoliday;
-  const needsGabriel = parsed.isFullRanch || approvalSides.has('gabriel') || isHoliday;
+  const needsClore = parsed.isFullRanch || approvalSides.has('clore');
+  const needsGabriel = parsed.isFullRanch || approvalSides.has('gabriel');
   const needsEither = !needsClore && !needsGabriel && approvalSides.has('shared');
   return { isHoliday, holidayName, needsClore, needsGabriel, needsEither };
 }

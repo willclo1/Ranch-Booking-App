@@ -102,7 +102,7 @@ export function BookingDetailPage() {
           <StatusChip status={b.status} />
         </div>
 
-        {b.isHoliday && <div className="banner banner-holiday">★ {b.holidayName} — needs an admin from both families</div>}
+        {b.isHoliday && <div className="banner banner-holiday">★ {b.holidayName} — this stay falls over a holiday</div>}
         {b.isFullRanch && <div className="banner banner-info">Whole-ranch booking — every room is reserved.</div>}
         {b.notes && <p style={{ margin: 0 }}>{b.notes}</p>}
 
