@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { networkInterfaces } from 'node:os';
 import { getDb } from './db.js';
-import { attachUser } from './auth.js';
+import { attachUser, requireSameOrigin } from './auth.js';
 import { auth } from './routes/auth.js';
 import { users, rooms } from './routes/users.js';
 import { bookings } from './routes/bookings.js';
@@ -19,6 +19,7 @@ getDb(); // open + migrate + seed on boot
 const app = express();
 app.disable('x-powered-by');
 app.use(express.json({ limit: '256kb' }));
+app.use('/api', requireSameOrigin);
 app.use(attachUser);
 
 app.use('/api/auth', auth);

@@ -55,13 +55,58 @@ export function readToken(req) {
   return null;
 }
 
+/**
+ * SameSite policy for the session cookie.
+ *
+ * Over HTTPS it is `SameSite=None; Secure; Partitioned`, so the app also works
+ * framed inside the ranch's Home Assistant wall panel. A `SameSite=Lax`
+ * cookie is neither stored nor sent in a cross-site iframe, so there every
+ * sign-in silently failed and every API call came back signed-out.
+ * `Partitioned` (CHIPS) keys the framed session to the embedding site: it is
+ * separate from the standalone app's session and no other site can use it.
+ *
+ * Loosening SameSite gives up its CSRF protection; `requireSameOrigin` below
+ * takes that job over. Plain-HTTP development keeps `Lax`, because browsers
+ * reject `SameSite=None` without `Secure`. Caddy terminates TLS and forwards
+ * `X-Forwarded-Proto`.
+ */
+function sameSite(res) {
+  const req = res.req;
+  const proto = String(req?.headers['x-forwarded-proto'] || '').split(',')[0].trim();
+  return req?.secure || proto === 'https' ? 'SameSite=None; Secure; Partitioned' : 'SameSite=Lax';
+}
+
 export function setSessionCookie(res, token) {
   const maxAge = SESSION_DAYS * 86400;
-  res.setHeader('Set-Cookie', `ranch_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`);
+  res.setHeader('Set-Cookie', `ranch_session=${encodeURIComponent(token)}; Path=/; HttpOnly; ${sameSite(res)}; Max-Age=${maxAge}`);
 }
 
 export function clearSessionCookie(res) {
-  res.setHeader('Set-Cookie', 'ranch_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
+  res.setHeader('Set-Cookie', `ranch_session=; Path=/; HttpOnly; ${sameSite(res)}; Max-Age=0`);
+}
+
+/**
+ * CSRF guard for /api. The session cookie can be `SameSite=None` (see
+ * sameSite above), so a request that changes something must come from this
+ * app's own pages. Browsers always send `Origin` on a cross-site POST, PATCH
+ * or DELETE; it must name this host. Requests without one (the API test
+ * script, curl) are not from a browser page and pass.
+ */
+export function requireSameOrigin(req, res, next) {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+  const origin = req.headers.origin;
+  if (!origin) return next();
+  let originHost = '';
+  try {
+    originHost = new URL(origin).host;
+  } catch {
+    /* "null" or garbage: refused below */
+  }
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
+  if (!originHost || originHost !== host) {
+    return res.status(403).json({ error: 'Cross-site request refused' });
+  }
+  next();
 }
 
 /** Express middleware: attach req.user (or null). */
