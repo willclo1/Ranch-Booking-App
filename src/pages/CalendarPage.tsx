@@ -233,6 +233,10 @@ export function CalendarPage() {
 
   return (
     <div>
+      {/* cal-main / cal-side sit side by side on the wall panel (styles.css,
+          panel mode); on a phone they are plain wrappers and stack as before. */}
+      <div className="cal-layout">
+      <div className="cal-main">
       <div className="cal-head">
         <button className="cal-nav-btn" aria-label={view === 'month' ? 'Previous month' : 'Previous week'} onClick={() => step(-1)}>
           ‹
@@ -365,13 +369,17 @@ export function CalendarPage() {
       )}
 
       {isLoading && <Spinner />}
+      </div>
 
+      <section className="cal-side">
       <h3 className="section-title">Upcoming stays</h3>
       <div className="stack">
         {upcoming.length === 0 && !isLoading && <p className="muted">Nothing booked yet this month — the ranch is wide open.</p>}
         {upcoming.map((b) => (
           <BookingCard key={b.id} booking={b} onClick={() => navigate(`/booking/${b.id}`)} />
         ))}
+      </div>
+      </section>
       </div>
       {sel && <div style={{ height: 84 }} />}
 

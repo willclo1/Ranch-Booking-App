@@ -62,8 +62,12 @@ export function HomePage() {
         </Link>
       </div>
 
+      {/* Each section is its own stack so the wall panel can lay them out
+          side by side (styles.css, panel mode). On a phone the nested stacks
+          space exactly like the flat list they replaced. */}
+      <div className="stack home-sections">
       {admin && pending.length > 0 && (
-        <>
+        <section className="stack">
           <h3 className="section-title">Waiting on your approval</h3>
           <div className="stack">
             {pending.slice(0, 3).map((b) => (
@@ -75,9 +79,10 @@ export function HomePage() {
               </Link>
             )}
           </div>
-        </>
+        </section>
       )}
 
+      <section className="stack">
       <h3 className="section-title">At the ranch right now</h3>
       {isLoading ? (
         <Spinner />
@@ -92,7 +97,9 @@ export function HomePage() {
           ))}
         </div>
       )}
+      </section>
 
+      <section className="stack">
       <h3 className="section-title">Your bookings</h3>
       {myBookings.length > 0 ? (
         <div className="stack">
@@ -113,6 +120,8 @@ export function HomePage() {
           </button>
         </div>
       )}
+      </section>
+      </div>
     </div>
   );
 }

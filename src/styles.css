@@ -1363,3 +1363,128 @@ details.acc .acc-body {
 .cal-weeks.week-view .cal-day {
   min-height: 190px;
 }
+
+/* ================================================================== */
+/* Panel mode — the app framed in the ranch's Home Assistant wall     */
+/* panel: a landscape tablet dialog about 1180 × 670. Turned on by    */
+/* ?panel=1 (src/panel.ts). Every rule here is under html[data-panel],*/
+/* so a phone or the installed app never sees any of it.              */
+/* ================================================================== */
+html[data-panel] {
+  /* no bottom bar: fixed bars (toasts, the date-selection bar) sit at the
+     bottom edge instead of above it */
+  --nav-h: 0px;
+  --rail-w: 104px;
+}
+
+/* Side rail instead of the bottom tab bar, content filling the rest. The
+   header goes: the dialog around the app already says Bookings, and the
+   rail's highlighted item says where you are. */
+html[data-panel] .app-shell {
+  max-width: none;
+  height: 100dvh;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: var(--rail-w) minmax(0, 1fr);
+}
+html[data-panel] .app-header {
+  display: none;
+}
+html[data-panel] .app-main {
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 18px 28px 24px;
+}
+html[data-panel] .bottom-nav {
+  position: static;
+  grid-column: 1;
+  grid-row: 1;
+  max-width: none;
+  margin: 0;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 14px 10px;
+  border-top: none;
+  border-right: 1px solid var(--line);
+}
+html[data-panel] .nav-item {
+  flex: none;
+  min-height: 76px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  gap: 6px;
+}
+html[data-panel] .nav-item.active {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+/* Forms and single lists read best at a measured width; Home and Calendar
+   spread out (below). */
+html[data-panel] .app-main > * {
+  max-width: 760px;
+  margin-inline: auto;
+}
+html[data-panel] .app-main > :has(> .home-sections),
+html[data-panel] .app-main > :has(> .cal-layout) {
+  max-width: none;
+}
+
+/* Home: greeting and quick actions side by side, then the sections in
+   columns. */
+html[data-panel] .stack:has(> .home-sections) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px 24px;
+  align-items: stretch;
+}
+html[data-panel] .home-sections {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 0 24px;
+  align-items: start;
+}
+html[data-panel] .quick-action {
+  justify-content: center;
+  font-size: 14px;
+}
+
+/* Calendar: the month on the left, upcoming stays beside it. Days are a
+   little shorter so a whole month fits the dialog without scrolling. */
+html[data-panel] .cal-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 24px;
+  align-items: start;
+}
+html[data-panel] .cal-side .section-title {
+  margin-top: 6px;
+}
+html[data-panel] .cal-weeks:not(.week-view) .cal-day {
+  min-height: 78px;
+}
+
+/* Bottom sheets become centred dialogs; a sheet sliding up the full width of
+   a landscape tablet is a phone gesture. */
+html[data-panel] .sheet-overlay {
+  align-items: center;
+}
+html[data-panel] .sheet {
+  max-width: 560px;
+  max-height: 86dvh;
+  border-radius: 20px;
+  padding-bottom: 20px;
+}
+html[data-panel] .sheet-grip {
+  display: none;
+}
+
+/* Bars that centre on the viewport centre on the content column instead. */
+html[data-panel] .select-bar,
+html[data-panel] .toast-stack {
+  left: calc(50% + var(--rail-w) / 2);
+}

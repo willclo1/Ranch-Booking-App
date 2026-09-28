@@ -1,4 +1,5 @@
 import { Logo } from '../components/bits';
+import { isPanel } from '../panel';
 
 export function isStandalone(): boolean {
   return (
@@ -22,6 +23,9 @@ export function markInstallSeen() {
 }
 
 export function shouldShowInstall(): boolean {
+  // The wall panel frames the app; there is no home screen to install it to.
+  // (isPhone matches the Android tablet, which is how it used to land here.)
+  if (isPanel) return false;
   try {
     return isPhone() && !isStandalone() && !localStorage.getItem(INSTALL_SEEN_KEY);
   } catch {

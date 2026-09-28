@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { registerSW } from 'virtual:pwa-register';
 import { App } from './App';
+import './panel'; // sets html[data-panel] before the first render
 import './styles.css';
 
 /** True while someone is mid-sentence in a field — a reload would throw it away. */
