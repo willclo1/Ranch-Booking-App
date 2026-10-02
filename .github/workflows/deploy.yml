@@ -1,0 +1,25 @@
+name: Deploy to Pi
+
+# Every push to main is deployed by the self-hosted runner on the Pi, which
+# runs scripts/update.sh against the live checkout in /mnt/data/ranch
+# (backup → fast-forward → npm ci if needed → build → restart → health check,
+# rolling back automatically if the app doesn't answer 200).
+#
+# Only push / manual triggers: never run this repo's self-hosted runner on
+# pull_request, since the repo is public and fork PRs could execute on the Pi.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-pi
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, ranch-pi]
+    timeout-minutes: 20
+    steps:
+      - name: Update live app
+        run: /mnt/data/ranch/scripts/update.sh
